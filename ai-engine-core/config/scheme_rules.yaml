@@ -1,0 +1,21 @@
+micro_finance_scheme:
+  name: "Micro Finance Scheme"
+  max_project_cost_cap: 140000.00
+  max_loan_cap: 125000.00
+  loan_fraction: 0.90
+  margin_fraction: 0.10
+  annual_interest_rate: 0.065
+  tenure_years: 3
+  moratorium_months: 3
+  repayment_frequency: "quarterly"
+
+term_loan_scheme:
+  name: "Term Loan Scheme"
+  max_project_cost_cap: 5000000.00
+  max_loan_cap: 4500000.00
+  loan_fraction: 0.90
+  margin_fraction: 0.10
+  annual_interest_rate: 0.080
+  tenure_years: 7
+  moratorium_months: 6
+  repayment_frequency: "quarterly"

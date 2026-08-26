@@ -1,0 +1,21 @@
+primary_model: "llama-3.3-70b-versatile"
+judge_model: "llama-3.1-8b-instant"
+temperature: 0.2
+max_tokens: 4096
+
+cache:
+  similarity_threshold: 0.96
+
+quality_gate:
+  confidence_threshold: 0.82
+  weights:
+    faithfulness: 0.45
+    relevance: 0.25
+    financial: 0.30
+
+rag:
+  dense_model: "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
+  rrf_k: 60
+  top_dense_candidates: 20
+  top_sparse_candidates: 20
+  top_reranked_chunks: 5
