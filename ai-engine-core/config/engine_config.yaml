@@ -19,3 +19,11 @@ rag:
   top_dense_candidates: 20
   top_sparse_candidates: 20
   top_reranked_chunks: 5
+
+audio:
+  provider: "sarvam"
+  asr_model: "saarika:v2"
+  translation_model: "mayura:v1"
+  tts_model: "bulbul:v1"
+  default_speaker: "meera"
+  supported_languages: ["en-IN", "hi-IN", "gu-IN"]
