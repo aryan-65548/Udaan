@@ -9,10 +9,35 @@ from pydantic import BaseModel, Field
 
 class AdvisoryRequest(BaseModel):
     """Input contract for the AI Advisor Engine."""
-    location: str = Field(
-        ...,
-        description="Village, Taluka/Block, and District in Gujarat (e.g. 'Petlad, Anand, Gujarat')",
-        examples=["Petlad, Anand, Gujarat"]
+    location: Optional[str] = Field(
+        default=None,
+        description="Exact street address, Shop No., Complex, or Area in Gujarat (e.g. 'Shop No. 4, Swastik Complex, Station Road')",
+        examples=["Shop No. 4, Swastik Complex, Station Road"]
+    )
+    latitude: Optional[float] = Field(
+        default=None,
+        description="Device GPS latitude coordinate for 'Use Current Location' (e.g. 22.4746)",
+        examples=[22.4746]
+    )
+    longitude: Optional[float] = Field(
+        default=None,
+        description="Device GPS longitude coordinate for 'Use Current Location' (e.g. 72.8021)",
+        examples=[72.8021]
+    )
+    taluka: Optional[str] = Field(
+        default=None,
+        description="Taluka/Block name in Gujarat (e.g. 'Petlad')",
+        examples=["Petlad"]
+    )
+    district: Optional[str] = Field(
+        default=None,
+        description="District name in Gujarat (e.g. 'Anand')",
+        examples=["Anand"]
+    )
+    pincode: Optional[str] = Field(
+        default=None,
+        description="Optional 6-digit postal PIN code in Gujarat for exact geocoding",
+        examples=["388450"]
     )
     margin_capital: float = Field(
         ...,
