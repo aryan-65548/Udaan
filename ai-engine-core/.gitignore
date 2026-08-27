@@ -1,44 +1,26 @@
-# Environment & Secrets
+# Environment Secrets
 .env
 .env.local
-*.pem
-*.key
+.env.*.local
+*.env
 
-# Python Bytecode & Cache
+# Python & System Caches
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
-.coverage
-htmlcov/
-.mypy_cache/
-.ruff_cache/
+.DS_Store
+.vscode/
+.idea/
 
 # Virtual Environments
 venv/
 .venv/
 env/
 ENV/
-env.bak/
-venv.bak/
 
-# AI Engine Vector Store & Processed Data
+# Data & Local Vector Persistence
+data/
 data/chroma_db/
-data/processed/*.jsonl
-data/processed/*.pkl
-*.sqlite3
-
-# Audio Files & Generated Outputs
-*.wav
-*.mp3
-*.m4a
-*.flac
-*.tmp
-
-# Operating System & IDE Files
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-*.swp
-*.swo
+data/flashrank_cache/
+*.pkl
