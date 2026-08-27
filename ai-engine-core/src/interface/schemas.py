@@ -32,7 +32,7 @@ class AdvisoryRequest(BaseModel):
     )
     output_audio: bool = Field(
         default=False,
-        description="Whether to synthesize Bhashini TTS audio payload in the response"
+        description="Whether to synthesize Sarvam AI TTS audio payload in the response"
     )
 
 
