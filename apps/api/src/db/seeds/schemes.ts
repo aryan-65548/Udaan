@@ -39,6 +39,6 @@ export const initialSchemeConfigs = [
 
 export async function seedSchemes(db: any) {
   for (const config of initialSchemeConfigs) {
-    await db.insert(schemeConfigs).values(config).onConflictDoNothing();
+    await db.insert(schemeConfigs).values(config).onConflictDoNothing({ target: schemeConfigs.schemeCode });
   }
 }

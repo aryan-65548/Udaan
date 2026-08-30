@@ -16,7 +16,7 @@ export const paymentFrequencyEnum = pgEnum('payment_frequency', ['MONTHLY', 'QUA
 
 export const schemeConfigs = pgTable('scheme_configs', {
   id: uuid('id').primaryKey().defaultRandom(),
-  schemeCode: varchar('scheme_code', { length: 50 }).notNull(),
+  schemeCode: varchar('scheme_code', { length: 50 }).notNull().unique(),
   schemeName: varchar('scheme_name', { length: 150 }).notNull(),
   minProjectCost: decimal('min_project_cost', { precision: 14, scale: 2 }),
   maxProjectCost: decimal('max_project_cost', { precision: 14, scale: 2 }),
