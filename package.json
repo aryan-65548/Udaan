@@ -1,0 +1,10 @@
+{
+  "name": "udaan-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint"
+  }
+}
