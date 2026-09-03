@@ -9,7 +9,7 @@
     "dev": "tsx watch src/index.ts",
     "db:generate": "drizzle-kit generate:pg",
     "db:migrate": "tsx src/db/migrate.ts",
-    "test": "jest",
+    "test": "jest --runInBand",
     "lint": "eslint src/ --ext .ts",
     "typecheck": "tsc --noEmit"
   },

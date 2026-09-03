@@ -22,7 +22,7 @@ export const initialSchemeConfigs = [
     id: crypto.randomUUID(),
     schemeCode: 'TERM_LOAN',
     schemeName: 'Term Loan Scheme',
-    minProjectCost: '140001.00',
+    minProjectCost: '140000.01',
     maxProjectCost: '5000000.00',
     financingPercentage: '90.000',
     maxLoanAmount: '4500000.00',

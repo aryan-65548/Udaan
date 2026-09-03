@@ -184,6 +184,9 @@ export interface ScheduleItem {
   installmentAmount: Decimal;
   closingPrincipal: Decimal;
   isMoratorium: boolean;
+  periodStart?: string;
+  periodEnd?: string;
+  dueDate?: string;
 }
 
 export function generateRepaymentSchedule(

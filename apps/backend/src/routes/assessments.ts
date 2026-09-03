@@ -23,37 +23,7 @@ const router = Router();
 // All assessment endpoints require authentication
 router.use(authenticate);
 
-// Helper function to verify assessment existence and ownership
-async function getAuthorizedAssessment(assessmentId: string, userId: string, res: Response) {
-  const result = await db
-    .select()
-    .from(assessments)
-    .where(eq(assessments.id, assessmentId))
-    .limit(1);
-
-  if (!result.length) {
-    res.status(404).json({
-      error: {
-        code: 'NOT_FOUND',
-        message: 'Assessment not found',
-      },
-    });
-    return null;
-  }
-
-  const assessment = result[0];
-  if (assessment.userId !== userId) {
-    res.status(403).json({
-      error: {
-        code: 'FORBIDDEN',
-        message: 'Access denied: you do not own this assessment',
-      },
-    });
-    return null;
-  }
-
-  return assessment;
-}
+import { getAuthorizedAssessment } from '../utils/assessments';
 
 // POST /assessments - Create new assessment
 router.post('/', async (req: AuthenticatedRequest, res, next) => {
