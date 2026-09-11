@@ -5,6 +5,7 @@ import userRoutes from './routes/users';
 import locationRoutes from './routes/locations';
 import businessCategoryRoutes from './routes/business-categories';
 import assessmentRoutes from './routes/assessments';
+import validationRoutes from './routes/validation';
 import { errorHandler } from './middleware/error';
 
 const app = express();
@@ -16,6 +17,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/business-categories', businessCategoryRoutes);
+app.use('/api/assessments', validationRoutes);
 app.use('/api/assessments', assessmentRoutes);
 
 app.use((_req, res) => {

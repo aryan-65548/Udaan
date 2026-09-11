@@ -340,7 +340,9 @@ describe('Assessments Unit Tests', () => {
         completedAt: completedTime,
       };
 
-      (db.select as jest.Mock).mockReturnValueOnce(createMockQuery([mockAssessment]));
+      (db.select as jest.Mock)
+        .mockReturnValueOnce(createMockQuery([mockAssessment]))
+        .mockReturnValueOnce(createMockQuery([]));
 
       (db.update as jest.Mock).mockReturnValue({
         set: jest.fn().mockReturnValue({
@@ -443,6 +445,35 @@ describe('Assessments Unit Tests', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.data.valueText).toBe('Main Market Road');
+    });
+
+    it('forces input source to USER even if client attempts to spoof AI or SYSTEM', async () => {
+      const mockAssessment = { id: assessmentId, userId: testUserId };
+      let capturedValues: Record<string, unknown> = {};
+
+      (db.select as jest.Mock).mockReturnValueOnce(createMockQuery([mockAssessment]));
+      (db.insert as jest.Mock).mockReturnValue({
+        values: jest.fn().mockImplementation((vals) => {
+          capturedValues = vals;
+          return {
+            onConflictDoUpdate: jest.fn().mockReturnValue({
+              returning: jest.fn().mockResolvedValue([{ id: 'i1000000-0000-0000-0000-000000000099', ...vals }]),
+            }),
+          };
+        }),
+      });
+
+      const res = await request(app)
+        .put(`/api/assessments/${assessmentId}/inputs/business_location_address`)
+        .set('Authorization', `Bearer ${validToken}`)
+        .send({
+          inputType: 'TEXT',
+          valueText: 'Main Market Road',
+          source: 'AI',
+        });
+
+      expect(res.status).toBe(200);
+      expect(capturedValues.source).toBe('USER');
     });
 
     it('PUT /inputs/:inputKey upserts BOOLEAN input', async () => {

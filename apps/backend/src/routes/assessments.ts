@@ -6,8 +6,9 @@ import {
   businessCategories,
   assessmentInputs,
   financialRuns,
+  validationTasks,
 } from '../db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import {
   assessmentIdParamSchema,
@@ -24,7 +25,7 @@ const router = Router();
 router.use(authenticate);
 
 // Helper function to verify assessment existence and ownership
-async function getAuthorizedAssessment(assessmentId: string, userId: string, res: Response) {
+export async function getAuthorizedAssessment(assessmentId: string, userId: string, res: Response) {
   const result = await db
     .select()
     .from(assessments)
@@ -233,6 +234,23 @@ router.post('/:id/complete', async (req: AuthenticatedRequest, res, next) => {
     const assessment = await getAuthorizedAssessment(id, req.user!.id, res);
     if (!assessment) return;
 
+    // Validation rule: An assessment cannot be COMPLETED if any validation tasks are PENDING.
+    // If validation tasks exist, all of them must be either COMPLETED or SKIPPED.
+    const tasks = await db
+      .select({ id: validationTasks.id, status: validationTasks.status })
+      .from(validationTasks)
+      .where(eq(validationTasks.assessmentId, id));
+
+    const hasPending = tasks.some((t) => t.status === 'PENDING');
+    if (hasPending) {
+      return res.status(400).json({
+        error: {
+          code: 'VALIDATION_INCOMPLETE',
+          message: 'Cannot complete assessment: one or more validation tasks are pending',
+        },
+      });
+    }
+
     const updated = await db
       .update(assessments)
       .set({
@@ -267,7 +285,7 @@ router.put('/:id/inputs/:inputKey', async (req: AuthenticatedRequest, res, next)
       valueNumber: data.valueNumber !== undefined && data.valueNumber !== null ? String(data.valueNumber) : null,
       valueBoolean: data.valueBoolean ?? null,
       valueJson: data.valueJson ?? null,
-      source: data.source,
+      source: 'USER' as const,
       updatedAt: new Date(),
     };
 
@@ -337,7 +355,7 @@ router.patch('/:id/profile', async (req: AuthenticatedRequest, res, next) => {
 
       if (rawVal !== null && typeof rawVal === 'object' && 'value' in rawVal) {
         questionText = rawVal.questionText ?? null;
-        source = (rawVal.source as InputSource) ?? 'USER';
+        source = 'USER';
         const v = rawVal.value;
         if (typeof v === 'number') {
           inputType = (rawVal.inputType as InputType) ?? 'NUMBER';
