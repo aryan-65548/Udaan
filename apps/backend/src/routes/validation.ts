@@ -3,7 +3,7 @@ import { db } from '../db';
 import { validationTasks } from '../db/schema';
 import { eq, and, asc } from 'drizzle-orm';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
-import { getAuthorizedAssessment } from './assessments';
+import { getAuthorizedAssessment } from '../utils/assessments';
 import { assessmentIdParamSchema } from '../schemas/assessments';
 import {
   validationTaskIdParamSchema,

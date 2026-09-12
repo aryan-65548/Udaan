@@ -8,6 +8,8 @@ import assessmentRoutes from './routes/assessments';
 import financeRoutes from './routes/finance';
 import schemeRoutes from './routes/schemes';
 import validationRoutes from './routes/validation';
+import locationIntelligenceRoutes from './routes/location-intelligence';
+import aiRoutes from './routes/ai';
 import { errorHandler } from './middleware/error';
 
 const app = express();
@@ -22,6 +24,8 @@ app.use('/api/business-categories', businessCategoryRoutes);
 app.use('/api/assessments', validationRoutes);
 app.use('/api/assessments', assessmentRoutes);
 app.use('/api/assessments/:id/finance', financeRoutes);
+app.use('/api/assessments/:id/location-intelligence', locationIntelligenceRoutes);
+app.use('/api/assessments/:id/ai', aiRoutes);
 app.use('/api/schemes', schemeRoutes);
 
 app.use((_req, res) => {
