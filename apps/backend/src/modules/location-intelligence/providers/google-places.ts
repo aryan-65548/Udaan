@@ -82,7 +82,9 @@ export class PlacesProvider {
       };
     });
 
-    // Sort by distance
-    return competitors.sort((a, b) => a.distanceKm - b.distanceKm);
+    // Filter by strict radius and sort by distance
+    return competitors
+      .filter((c) => c.distanceKm <= radiusKm)
+      .sort((a, b) => a.distanceKm - b.distanceKm);
   }
 }
