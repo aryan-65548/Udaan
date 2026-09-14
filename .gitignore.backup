@@ -1,0 +1,32 @@
+# Environment Secrets
+.env
+.env.local
+.env.*.local
+*.env
+
+# Python & System Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.DS_Store
+.vscode/
+.idea/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Data & Local Vector Persistence
+data/
+data/chroma_db/
+data/flashrank_cache/
+*.pkl
+
+dataset.md
+full_antigravity_prompt.md
+phases.md
+techstack.md
+plan.md

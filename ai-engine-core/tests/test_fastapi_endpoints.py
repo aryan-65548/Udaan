@@ -14,30 +14,31 @@ def test_health_endpoint():
     assert res.json()["status"] == "HEALTHY"
 
 
-def test_start_session_endpoint(mock_backend_payload):
+def test_start_session_endpoint(mock_minimal_payload):
     res = client.post(
         "/internal/ai/session/start",
-        json={"context": mock_backend_payload}
+        json={"context": mock_minimal_payload}
     )
     assert res.status_code == 200
     data = res.json()
     assert "sessionId" in data
     assert data["status"] == "QUESTIONING"
+    assert "question" in data
     assert "contextQuality" in data
 
 
-def test_session_message_endpoint(mock_backend_payload):
+def test_session_message_endpoint(mock_minimal_payload):
     res = client.post(
         "/internal/ai/session/message",
         json={
-            "assessmentId": mock_backend_payload["assessmentId"],
+            "assessmentId": mock_minimal_payload["assessmentId"],
             "sessionId": "session_test_01",
             "message": "I have 5 years of dairy experience",
             "answer": {
                 "key": "previous_experience",
                 "value": "5 years of dairy experience"
             },
-            "context": mock_backend_payload
+            "context": mock_minimal_payload
         }
     )
     assert res.status_code == 200
