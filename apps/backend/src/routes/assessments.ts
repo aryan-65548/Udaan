@@ -1,4 +1,13 @@
 import { Router, Response } from 'express';
+import {
+  upsertAssessmentInput,
+  getAssessmentInputs,
+} from '../services/assessment-input.service';
+import {
+  transitionAssessmentStatus,
+  InvalidStateTransitionError,
+} from '../services/assessment-state.service';
+import { InputType } from '../types/assessment-context';
 import { db } from '../db';
 import {
   assessments,
@@ -8,7 +17,7 @@ import {
   financialRuns,
   validationTasks,
 } from '../db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import {
   assessmentIdParamSchema,
@@ -251,17 +260,23 @@ router.post('/:id/complete', async (req: AuthenticatedRequest, res, next) => {
       });
     }
 
-    const updated = await db
-      .update(assessments)
-      .set({
-        status: 'COMPLETED',
+    try {
+      const updated = await transitionAssessmentStatus(id, 'COMPLETED', {
         completedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(assessments.id, id))
-      .returning();
+      });
 
-    return res.json({ data: updated[0] });
+      return res.json({ data: updated });
+    } catch (err) {
+      if (err instanceof InvalidStateTransitionError) {
+        return res.status(400).json({
+          error: {
+            code: 'INVALID_STATE_TRANSITION',
+            message: err.message,
+          },
+        });
+      }
+      throw err;
+    }
   } catch (error) {
     next(error);
   }
@@ -276,38 +291,17 @@ router.put('/:id/inputs/:inputKey', async (req: AuthenticatedRequest, res, next)
 
     const data = putAssessmentInputSchema.parse(req.body);
 
-    const values = {
-      assessmentId: id,
-      inputKey,
-      questionText: data.questionText ?? null,
+    const inserted = await upsertAssessmentInput(id, inputKey, {
+      questionText: data.questionText,
       inputType: data.inputType,
-      valueText: data.valueText ?? null,
-      valueNumber: data.valueNumber !== undefined && data.valueNumber !== null ? String(data.valueNumber) : null,
-      valueBoolean: data.valueBoolean ?? null,
-      valueJson: data.valueJson ?? null,
-      source: 'USER' as const,
-      updatedAt: new Date(),
-    };
+      valueText: data.valueText,
+      valueNumber: data.valueNumber,
+      valueBoolean: data.valueBoolean,
+      valueJson: data.valueJson,
+      source: 'USER',
+    });
 
-    const inserted = await db
-      .insert(assessmentInputs)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [assessmentInputs.assessmentId, assessmentInputs.inputKey],
-        set: {
-          questionText: values.questionText,
-          inputType: values.inputType,
-          valueText: values.valueText,
-          valueNumber: values.valueNumber,
-          valueBoolean: values.valueBoolean,
-          valueJson: values.valueJson,
-          source: values.source,
-          updatedAt: values.updatedAt,
-        },
-      })
-      .returning();
-
-    return res.json({ data: inserted[0] });
+    return res.json({ data: inserted });
   } catch (error) {
     next(error);
   }
@@ -320,10 +314,7 @@ router.get('/:id/inputs', async (req: AuthenticatedRequest, res, next) => {
     const assessment = await getAuthorizedAssessment(id, req.user!.id, res);
     if (!assessment) return;
 
-    const inputs = await db
-      .select()
-      .from(assessmentInputs)
-      .where(eq(assessmentInputs.assessmentId, id));
+    const inputs = await getAssessmentInputs(id);
 
     return res.json({ data: inputs });
   } catch (error) {
@@ -341,78 +332,71 @@ router.patch('/:id/profile', async (req: AuthenticatedRequest, res, next) => {
     const profileData = patchProfileInputsSchema.parse(req.body);
     const updatedRecords = [];
 
-    type InputType = 'TEXT' | 'NUMBER' | 'BOOLEAN' | 'SELECT' | 'MULTI_SELECT' | 'DATE' | 'JSON';
-    type InputSource = 'USER' | 'AI' | 'SYSTEM';
+    type ProfileInputType = InputType;
 
     for (const [key, rawVal] of Object.entries(profileData)) {
-      let inputType: InputType = 'TEXT';
+      let inputType: ProfileInputType = 'TEXT';
       let valueText: string | null = null;
-      let valueNumber: string | null = null;
+      let valueNumber: string | number | null = null;
       let valueBoolean: boolean | null = null;
       let valueJson: unknown = null;
       let questionText: string | null = null;
-      let source: InputSource = 'USER';
 
       if (rawVal !== null && typeof rawVal === 'object' && 'value' in rawVal) {
         questionText = rawVal.questionText ?? null;
-        source = 'USER';
         const v = rawVal.value;
-        if (typeof v === 'number') {
-          inputType = (rawVal.inputType as InputType) ?? 'NUMBER';
-          valueNumber = String(v);
-        } else if (typeof v === 'boolean') {
-          inputType = (rawVal.inputType as InputType) ?? 'BOOLEAN';
-          valueBoolean = v;
-        } else if (typeof v === 'string') {
-          inputType = (rawVal.inputType as InputType) ?? 'TEXT';
-          valueText = v;
+        if (rawVal.inputType) {
+          inputType = rawVal.inputType as ProfileInputType;
+          if (inputType === 'NUMBER') {
+            valueNumber = v;
+          } else if (inputType === 'BOOLEAN') {
+            valueBoolean = Boolean(v);
+          } else if (inputType === 'TEXT' || inputType === 'SELECT' || inputType === 'DATE') {
+            valueText = String(v);
+          } else {
+            valueJson = v;
+          }
         } else {
-          inputType = (rawVal.inputType as InputType) ?? 'JSON';
-          valueJson = v;
+          // Infer inputType from value if omitted
+          if (typeof v === 'number') {
+            inputType = 'NUMBER';
+            valueNumber = v;
+          } else if (typeof v === 'boolean') {
+            inputType = 'BOOLEAN';
+            valueBoolean = v;
+          } else if (typeof v === 'string') {
+            inputType = 'TEXT';
+            valueText = v;
+          } else {
+            inputType = 'JSON';
+            valueJson = v;
+          }
         }
       } else if (typeof rawVal === 'number') {
         inputType = 'NUMBER';
-        valueNumber = String(rawVal);
+        valueNumber = rawVal;
       } else if (typeof rawVal === 'boolean') {
         inputType = 'BOOLEAN';
         valueBoolean = rawVal;
       } else if (typeof rawVal === 'string') {
         inputType = 'TEXT';
         valueText = rawVal;
+      } else if (rawVal !== null && typeof rawVal === 'object') {
+        inputType = 'JSON';
+        valueJson = rawVal;
       }
 
-      const values = {
-        assessmentId: id,
-        inputKey: key,
+      const record = await upsertAssessmentInput(id, key, {
         questionText,
         inputType,
         valueText,
         valueNumber,
         valueBoolean,
         valueJson,
-        source,
-        updatedAt: new Date(),
-      };
+        source: 'USER',
+      });
 
-      const record = await db
-        .insert(assessmentInputs)
-        .values(values)
-        .onConflictDoUpdate({
-          target: [assessmentInputs.assessmentId, assessmentInputs.inputKey],
-          set: {
-            questionText: values.questionText,
-            inputType: values.inputType,
-            valueText: values.valueText,
-            valueNumber: values.valueNumber,
-            valueBoolean: values.valueBoolean,
-            valueJson: values.valueJson,
-            source: values.source,
-            updatedAt: values.updatedAt,
-          },
-        })
-        .returning();
-
-      updatedRecords.push(record[0]);
+      updatedRecords.push(record);
     }
 
     return res.json({ data: updatedRecords });

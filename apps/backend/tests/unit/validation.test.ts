@@ -476,15 +476,21 @@ describe('Field Validation Unit Tests', () => {
         { id: otherTaskId, assessmentId, status: 'SKIPPED' },
       ];
 
-      const mockCompleted = {
+      const mockReportReady = {
         ...mockAssessmentOwner,
+        status: 'REPORT_READY',
+      };
+
+      const mockCompleted = {
+        ...mockReportReady,
         status: 'COMPLETED',
         completedAt: new Date().toISOString(),
       };
 
       (db.select as jest.Mock)
-        .mockReturnValueOnce(createMockQuery([mockAssessmentOwner])) // auth check
-        .mockReturnValueOnce(createMockQuery(existingValidationTasks)); // tasks query: 1 COMPLETED, 1 SKIPPED
+        .mockReturnValueOnce(createMockQuery([mockReportReady])) // auth check
+        .mockReturnValueOnce(createMockQuery(existingValidationTasks)) // tasks query: 1 COMPLETED, 1 SKIPPED
+        .mockReturnValueOnce(createMockQuery([mockReportReady])); // transitionAssessmentStatus check
 
       (db.update as jest.Mock).mockReturnValue({
         set: jest.fn().mockReturnValue({
@@ -504,15 +510,21 @@ describe('Field Validation Unit Tests', () => {
     });
 
     it('13c. allows completion when zero validation tasks exist (uninitiated validation)', async () => {
-      const mockCompleted = {
+      const mockReportReady = {
         ...mockAssessmentOwner,
+        status: 'REPORT_READY',
+      };
+
+      const mockCompleted = {
+        ...mockReportReady,
         status: 'COMPLETED',
         completedAt: new Date().toISOString(),
       };
 
       (db.select as jest.Mock)
-        .mockReturnValueOnce(createMockQuery([mockAssessmentOwner])) // auth check
-        .mockReturnValueOnce(createMockQuery([])); // 0 tasks
+        .mockReturnValueOnce(createMockQuery([mockReportReady])) // auth check
+        .mockReturnValueOnce(createMockQuery([])) // 0 tasks
+        .mockReturnValueOnce(createMockQuery([mockReportReady])); // transitionAssessmentStatus check
 
       (db.update as jest.Mock).mockReturnValue({
         set: jest.fn().mockReturnValue({

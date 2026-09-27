@@ -182,6 +182,20 @@ describe('Assessments Unit Tests', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
+
+    it('rejects creation with unsupported language', async () => {
+      const res = await request(app)
+        .post('/api/assessments')
+        .set('Authorization', `Bearer ${validToken}`)
+        .send({
+          locationId,
+          businessCategoryId: categoryId,
+          language: 'fr',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
   });
 
   describe('3. GET /api/assessments (List)', () => {
@@ -326,11 +340,11 @@ describe('Assessments Unit Tests', () => {
   });
 
   describe('6. POST /api/assessments/:id/complete (Complete)', () => {
-    it('marks assessment completed and sets completedAt for the owner', async () => {
+    it('marks assessment completed and sets completedAt for the owner when in REPORT_READY', async () => {
       const mockAssessment = {
         id: assessmentId,
         userId: testUserId,
-        status: 'IN_PROGRESS',
+        status: 'REPORT_READY',
       };
 
       const completedTime = new Date().toISOString();
@@ -342,7 +356,8 @@ describe('Assessments Unit Tests', () => {
 
       (db.select as jest.Mock)
         .mockReturnValueOnce(createMockQuery([mockAssessment]))
-        .mockReturnValueOnce(createMockQuery([]));
+        .mockReturnValueOnce(createMockQuery([]))
+        .mockReturnValueOnce(createMockQuery([mockAssessment]));
 
       (db.update as jest.Mock).mockReturnValue({
         set: jest.fn().mockReturnValue({
@@ -359,6 +374,26 @@ describe('Assessments Unit Tests', () => {
       expect(res.status).toBe(200);
       expect(res.body.data.status).toBe('COMPLETED');
       expect(res.body.data.completedAt).toBe(completedTime);
+    });
+
+    it('rejects completion with 400 INVALID_STATE_TRANSITION when assessment is IN_PROGRESS', async () => {
+      const mockAssessment = {
+        id: assessmentId,
+        userId: testUserId,
+        status: 'IN_PROGRESS',
+      };
+
+      (db.select as jest.Mock)
+        .mockReturnValueOnce(createMockQuery([mockAssessment]))
+        .mockReturnValueOnce(createMockQuery([]))
+        .mockReturnValueOnce(createMockQuery([mockAssessment]));
+
+      const res = await request(app)
+        .post(`/api/assessments/${assessmentId}/complete`)
+        .set('Authorization', `Bearer ${validToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_STATE_TRANSITION');
     });
 
     it('returns 403 when user B completes user A assessment', async () => {
@@ -640,6 +675,24 @@ describe('Assessments Unit Tests', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.data).toBeDefined();
+    });
+
+    it('rejects profile update with 400 when inputType and value are incompatible', async () => {
+      const mockAssessment = { id: assessmentId, userId: testUserId };
+      (db.select as jest.Mock).mockReturnValueOnce(createMockQuery([mockAssessment]));
+
+      const res = await request(app)
+        .patch(`/api/assessments/${assessmentId}/profile`)
+        .set('Authorization', `Bearer ${validToken}`)
+        .send({
+          invalid_field: {
+            inputType: 'TEXT',
+            value: 12345,
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
     });
   });
 });
