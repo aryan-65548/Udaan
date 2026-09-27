@@ -12,13 +12,13 @@ export const inputKeyParamSchema = z.object({
 export const createAssessmentSchema = z.object({
   locationId: z.string().uuid('Invalid location ID'),
   businessCategoryId: z.string().uuid('Invalid business category ID'),
-  language: z.string().min(2).max(10).default('en'),
+  language: z.enum(['en', 'hi', 'gu']).default('en'),
 });
 
 export const updateAssessmentSchema = z.object({
   locationId: z.string().uuid('Invalid location ID').optional(),
   businessCategoryId: z.string().uuid('Invalid business category ID').optional(),
-  language: z.string().min(2).max(10).optional(),
+  language: z.enum(['en', 'hi', 'gu']).optional(),
 }).refine(data => Object.keys(data).length > 0, {
   message: 'At least one field must be provided for update',
 });
@@ -33,17 +33,71 @@ export const putAssessmentInputSchema = z.object({
   source: z.enum(['USER', 'AI', 'SYSTEM']).default('USER'),
 });
 
+const profileObjectInputSchema = z.object({
+  questionText: z.string().optional().nullable(),
+  inputType: z.enum(['TEXT', 'NUMBER', 'BOOLEAN', 'SELECT', 'MULTI_SELECT', 'DATE', 'JSON']).optional(),
+  value: z.any(),
+  source: z.enum(['USER', 'AI', 'SYSTEM']).optional(),
+}).superRefine((data, ctx) => {
+  if (data.inputType !== undefined && data.value !== null && data.value !== undefined) {
+    switch (data.inputType) {
+      case 'TEXT':
+      case 'SELECT':
+      case 'DATE':
+        if (typeof data.value !== 'string') {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Value must be a string for inputType ${data.inputType}`,
+            path: ['value'],
+          });
+        }
+        break;
+      case 'NUMBER':
+        if (typeof data.value !== 'number' || Number.isNaN(data.value)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Value must be a number for inputType NUMBER',
+            path: ['value'],
+          });
+        }
+        break;
+      case 'BOOLEAN':
+        if (typeof data.value !== 'boolean') {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Value must be a boolean for inputType BOOLEAN',
+            path: ['value'],
+          });
+        }
+        break;
+      case 'MULTI_SELECT':
+        if (typeof data.value !== 'object' && typeof data.value !== 'string') {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Value must be an array, object, or string for inputType MULTI_SELECT',
+            path: ['value'],
+          });
+        }
+        break;
+      case 'JSON':
+        if (typeof data.value !== 'object') {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Value must be an object or array for inputType JSON',
+            path: ['value'],
+          });
+        }
+        break;
+    }
+  }
+});
+
 export const patchProfileInputsSchema = z.record(
   z.union([
     z.string(),
     z.number(),
     z.boolean(),
-    z.object({
-      questionText: z.string().optional(),
-      inputType: z.enum(['TEXT', 'NUMBER', 'BOOLEAN', 'SELECT', 'MULTI_SELECT', 'DATE', 'JSON']).optional(),
-      value: z.any(),
-      source: z.enum(['USER', 'AI', 'SYSTEM']).optional(),
-    }),
+    profileObjectInputSchema,
     z.null(),
   ])
 );

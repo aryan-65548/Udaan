@@ -1,8 +1,8 @@
 import request from 'supertest';
 import app from '../../src/app';
 import { db, pool } from '../../src/db';
-import { sql } from 'drizzle-orm';
-import { locations, businessCategories, validationTasks } from '../../src/db/schema';
+import { sql, eq } from 'drizzle-orm';
+import { assessments, locations, businessCategories, validationTasks } from '../../src/db/schema';
 import { seedLocations } from '../../src/db/seeds/locations';
 import { seedBusinessCategories } from '../../src/db/seeds/business-categories';
 
@@ -99,7 +99,21 @@ describe('Assessments Integration Tests (Live DB)', () => {
       expect(pRes.body.data.status).toBe(nextStatus);
     }
 
-    // 6. Now completion should succeed
+    // 6. Attempting completion while assessment is in DRAFT should fail state transition check
+    const invalidStateRes = await request(app)
+      .post(`/api/assessments/${assessmentId}/complete`)
+      .set('Authorization', `Bearer ${authToken}`);
+
+    expect(invalidStateRes.status).toBe(400);
+    expect(invalidStateRes.body.error.code).toBe('INVALID_STATE_TRANSITION');
+
+    // 7. Transition assessment to REPORT_READY so completion is allowed
+    await db
+      .update(assessments)
+      .set({ status: 'REPORT_READY' })
+      .where(eq(assessments.id, assessmentId));
+
+    // 8. Now completion should succeed
     const completeRes = await request(app)
       .post(`/api/assessments/${assessmentId}/complete`)
       .set('Authorization', `Bearer ${authToken}`);
