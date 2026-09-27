@@ -115,4 +115,99 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
+// POST /locations/manual - Create or find manual location hierarchy
+router.post('/manual', async (req, res, next) => {
+  try {
+    const { stateName, districtName, blockName, villageName } = req.body;
+    if (!stateName || !districtName) {
+      return res.status(400).json({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'State and District names are required',
+        },
+      });
+    }
+
+    // Find or create State
+    const allStates = await db.select().from(locations).where(eq(locations.type, 'STATE'));
+    let state = allStates.find((s) => s.name.toLowerCase() === stateName.trim().toLowerCase());
+    if (!state) {
+      const [newState] = await db
+        .insert(locations)
+        .values({
+          name: stateName.trim(),
+          type: 'STATE',
+          parentId: null,
+        })
+        .returning();
+      state = newState;
+    }
+
+    // Find or create District
+    const allDistricts = await db
+      .select()
+      .from(locations)
+      .where(and(eq(locations.type, 'DISTRICT'), eq(locations.parentId, state.id)));
+    let district = allDistricts.find((d) => d.name.toLowerCase() === districtName.trim().toLowerCase());
+    if (!district) {
+      const [newDistrict] = await db
+        .insert(locations)
+        .values({
+          name: districtName.trim(),
+          type: 'DISTRICT',
+          parentId: state.id,
+        })
+        .returning();
+      district = newDistrict;
+    }
+
+    let targetLocation = district;
+
+    if (blockName && blockName.trim()) {
+      const allBlocks = await db
+        .select()
+        .from(locations)
+        .where(and(eq(locations.type, 'BLOCK'), eq(locations.parentId, district.id)));
+      let block = allBlocks.find((b) => b.name.toLowerCase() === blockName.trim().toLowerCase());
+      if (!block) {
+        const [newBlock] = await db
+          .insert(locations)
+          .values({
+            name: blockName.trim(),
+            type: 'BLOCK',
+            parentId: district.id,
+          })
+          .returning();
+        block = newBlock;
+      }
+      targetLocation = block;
+
+      if (villageName && villageName.trim()) {
+        const allVillages = await db
+          .select()
+          .from(locations)
+          .where(and(eq(locations.type, 'VILLAGE'), eq(locations.parentId, block.id)));
+        let village = allVillages.find((v) => v.name.toLowerCase() === villageName.trim().toLowerCase());
+        if (!village) {
+          const [newVillage] = await db
+            .insert(locations)
+            .values({
+              name: villageName.trim(),
+              type: 'VILLAGE',
+              parentId: block.id,
+            })
+            .returning();
+          village = newVillage;
+        }
+        targetLocation = village;
+      }
+    }
+
+    return res.status(201).json({ data: targetLocation });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
+

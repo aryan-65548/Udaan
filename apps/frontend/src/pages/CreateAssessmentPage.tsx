@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import type { SupportedLanguage } from '../i18n/translations';
-import { createAssessment } from '../api/assessments';
+import { createAssessment, putAssessmentInput } from '../api/assessments';
 import { LocationSelector } from '../components/LocationSelector';
 import { CategorySelector } from '../components/CategorySelector';
 import { Alert } from '../components/Alert';
@@ -16,6 +16,7 @@ export const CreateAssessmentPage: React.FC<CreateAssessmentPageProps> = ({ onNa
 
   const [locationId, setLocationId] = useState<string>('');
   const [businessCategoryId, setBusinessCategoryId] = useState<string>('');
+  const [customCategory, setCustomCategory] = useState<string>('');
   const [advisoryLanguage, setAdvisoryLanguage] = useState<SupportedLanguage>(language);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -26,12 +27,12 @@ export const CreateAssessmentPage: React.FC<CreateAssessmentPageProps> = ({ onNa
     setError(null);
 
     if (!locationId) {
-      setError('Please select a location (State & District are required).');
+      setError(t.selectDistrict + ' / ' + t.selectState + ' (' + t.required + ')');
       return;
     }
 
     if (!businessCategoryId) {
-      setError('Please choose a business category.');
+      setError(t.selectCategory + ' (' + t.required + ')');
       return;
     }
 
@@ -42,6 +43,20 @@ export const CreateAssessmentPage: React.FC<CreateAssessmentPageProps> = ({ onNa
         businessCategoryId,
         language: advisoryLanguage,
       });
+
+      // If custom category was entered, persist it to inputs
+      if (customCategory.trim()) {
+        try {
+          await putAssessmentInput(created.id, 'custom_business_category', {
+            questionText: t.customCategoryLabel,
+            inputType: 'TEXT',
+            valueText: customCategory.trim(),
+            source: 'USER',
+          });
+        } catch {
+          // Non-blocking
+        }
+      }
 
       onNavigate('workflow', created.id);
     } catch (err: any) {
@@ -79,11 +94,11 @@ export const CreateAssessmentPage: React.FC<CreateAssessmentPageProps> = ({ onNa
             }}
           >
             <Sparkles size={16} />
-            <span>New Feasibility Dossier</span>
+            <span>{t.appName} — {t.tagline}</span>
           </div>
-          <h1 style={{ fontSize: '1.65rem', marginBottom: '8px' }}>Start New Business Assessment</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>
-            Select your operating geography, business sector, and preferred advisory language. All data is evaluated against local ground conditions.
+          <h1 style={{ fontSize: '1.65rem', marginBottom: '8px' }}>{t.basicDetailsTitle}</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', margin: 0 }}>
+            {t.basicDetailsSubtitle}
           </p>
         </div>
 
@@ -100,7 +115,7 @@ export const CreateAssessmentPage: React.FC<CreateAssessmentPageProps> = ({ onNa
               1. {t.location}
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
-              Specify your proposed operational area. Demographics and demand estimates depend on this choice.
+              {t.selectState}, {t.district}, {t.block}, {t.village}
             </p>
             <LocationSelector
               value={locationId}
@@ -115,11 +130,13 @@ export const CreateAssessmentPage: React.FC<CreateAssessmentPageProps> = ({ onNa
               2. {t.businessCategory}
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
-              Choose the enterprise type that best describes your planned micro-venture.
+              {t.selectCategory}
             </p>
             <CategorySelector
               value={businessCategoryId}
               onChange={(id) => setBusinessCategoryId(id)}
+              customCategory={customCategory}
+              onCustomCategoryChange={(text) => setCustomCategory(text)}
               disabled={isLoading}
             />
           </div>
@@ -130,7 +147,7 @@ export const CreateAssessmentPage: React.FC<CreateAssessmentPageProps> = ({ onNa
               3. {t.preferredLanguage}
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
-              The language used for your feasibility dossier and reports.
+              {t.language}
             </p>
             <select
               className="select-control"
@@ -172,11 +189,11 @@ export const CreateAssessmentPage: React.FC<CreateAssessmentPageProps> = ({ onNa
               {isLoading ? (
                 <>
                   <div className="spinner" />
-                  <span>Creating Assessment...</span>
+                  <span>{t.saving}</span>
                 </>
               ) : (
                 <>
-                  <span>Proceed to Assessment</span>
+                  <span>{t.next}</span>
                   <ArrowRight size={18} />
                 </>
               )}

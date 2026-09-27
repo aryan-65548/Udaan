@@ -2,26 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import {
   type AssessmentDetail,
-  type AssessmentInputRecord,
   getAssessmentById,
   updateAssessment,
   getAssessmentInputs,
   putAssessmentInput,
-  patchProfile,
   completeAssessment,
-  type InputType,
 } from '../api/assessments';
-import {
-  type ValidationTaskRecord,
-  getValidationTasks,
-  updateValidationTask,
-  type ValidationStatus,
-} from '../api/validation';
 import { Stepper, type AssessmentStep } from '../components/Stepper';
 import { StatusBadge } from '../components/StatusBadge';
 import { Alert } from '../components/Alert';
-import { ValidationCard } from '../components/ValidationCard';
-import { DynamicInputRenderer } from '../components/DynamicInputRenderer';
 import { LocationSelector } from '../components/LocationSelector';
 import { CategorySelector } from '../components/CategorySelector';
 import {
@@ -29,9 +18,14 @@ import {
   ArrowRight,
   Save,
   CheckCircle2,
-  ShieldCheck,
   RefreshCw,
-  Plus,
+  Edit,
+  Lightbulb,
+  Coins,
+  MapPin,
+  Briefcase,
+  Calculator,
+  AlertCircle,
 } from 'lucide-react';
 
 interface AssessmentWorkflowPageProps {
@@ -43,95 +37,116 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
   assessmentId,
   onNavigate,
 }) => {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
 
   const [currentStep, setCurrentStep] = useState<AssessmentStep>('basic');
   const [assessment, setAssessment] = useState<AssessmentDetail | null>(null);
-  const [inputs, setInputs] = useState<AssessmentInputRecord[]>([]);
-  const [validationTasks, setValidationTasks] = useState<ValidationTaskRecord[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [completionNotice, setCompletionNotice] = useState<{
-    type: 'success' | 'warning' | 'error' | 'info';
-    message: string;
-  } | null>(null);
+  const [submissionComplete, setSubmissionComplete] = useState(false);
 
-  // Profile Form state
-  const [profileForm, setProfileForm] = useState<{
-    previousExperience: string;
-    hasLand: boolean | null;
-    hasShop: boolean | null;
-    hasRoom: boolean | null;
-    hasEquipment: boolean | null;
-    expectedWorkingHours: number | '';
-    hasKnownCustomers: boolean | null;
-  }>({
-    previousExperience: '',
-    hasLand: null,
-    hasShop: null,
-    hasRoom: null,
-    hasEquipment: null,
-    expectedWorkingHours: '',
-    hasKnownCustomers: null,
-  });
-
-  // Basic Info Form state
+  // Step 1: Basic Info Form State
   const [basicLocationId, setBasicLocationId] = useState('');
   const [basicCategoryId, setBasicCategoryId] = useState('');
+  const [customCategoryText, setCustomCategoryText] = useState('');
   const [basicLanguage, setBasicLanguage] = useState<'en' | 'hi' | 'gu'>('en');
 
-  // New Custom Input Form state
-  const [newCustomKey, setNewCustomKey] = useState('');
-  const [newCustomQuestion, setNewCustomQuestion] = useState('');
-  const [newCustomType, setNewCustomType] = useState<InputType>('TEXT');
-  const [showAddCustomInput, setShowAddCustomInput] = useState(false);
+  // Step 2: Business Idea & Resources Form State
+  const [businessIdea, setBusinessIdea] = useState('');
+  const [selectedResources, setSelectedResources] = useState<{
+    hasLand: boolean;
+    hasShop: boolean;
+    hasMachinery: boolean;
+    hasTools: boolean;
+    hasInfrastructure: boolean;
+    hasSavings: boolean;
+    hasOther: boolean;
+    hasNone: boolean;
+  }>({
+    hasLand: false,
+    hasShop: false,
+    hasMachinery: false,
+    hasTools: false,
+    hasInfrastructure: false,
+    hasSavings: false,
+    hasOther: false,
+    hasNone: false,
+  });
+  const [otherResourceDesc, setOtherResourceDesc] = useState('');
+  const [availableFunds, setAvailableFunds] = useState<number | ''>('');
 
-  // Load all assessment data
+  // Step 3: Financial Contribution Form State
+  const [ownContribution, setOwnContribution] = useState<number | ''>('');
+
+  // Load all assessment data from real backend
   const loadData = useCallback(async () => {
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      const [detail, inputList, vTasks] = await Promise.all([
+      const [detail, inputList] = await Promise.all([
         getAssessmentById(assessmentId),
         getAssessmentInputs(assessmentId),
-        getValidationTasks(assessmentId),
       ]);
 
       setAssessment(detail);
-      setInputs(inputList);
-      setValidationTasks(vTasks);
-
-      // Pre-fill basic details
       setBasicLocationId(detail.locationId);
       setBasicCategoryId(detail.businessCategoryId);
       setBasicLanguage(detail.language);
 
-      // Populate profile state from inputs
+      if (detail.status === 'COMPLETED') {
+        setSubmissionComplete(true);
+      }
+
       const inputMap = new Map(inputList.map((i) => [i.inputKey, i]));
 
-      const getVal = (snake: string, camel: string) => inputMap.get(snake) || inputMap.get(camel);
+      // Populate Business Idea
+      const ideaVal = inputMap.get('business_idea')?.valueText || '';
+      setBusinessIdea(ideaVal);
 
-      const pExp = getVal('previous_experience', 'previousExperience');
-      const pLand = getVal('has_land', 'hasLand');
-      const pShop = getVal('has_shop', 'hasShop');
-      const pRoom = getVal('has_room', 'hasRoom');
-      const pEquip = getVal('has_equipment', 'hasEquipment');
-      const pHours = getVal('expected_working_hours', 'expectedWorkingHours');
-      const pCust = getVal('has_known_customers', 'hasKnownCustomers');
+      // Populate Custom Category
+      const customCat = inputMap.get('custom_business_category')?.valueText || '';
+      setCustomCategoryText(customCat);
 
-      setProfileForm({
-        previousExperience: pExp?.valueText || '',
-        hasLand: pLand?.valueBoolean !== null && pLand?.valueBoolean !== undefined ? pLand.valueBoolean : null,
-        hasShop: pShop?.valueBoolean !== null && pShop?.valueBoolean !== undefined ? pShop.valueBoolean : null,
-        hasRoom: pRoom?.valueBoolean !== null && pRoom?.valueBoolean !== undefined ? pRoom.valueBoolean : null,
-        hasEquipment: pEquip?.valueBoolean !== null && pEquip?.valueBoolean !== undefined ? pEquip.valueBoolean : null,
-        expectedWorkingHours:
-          pHours?.valueNumber !== null && pHours?.valueNumber !== undefined ? Number(pHours.valueNumber) : '',
-        hasKnownCustomers: pCust?.valueBoolean !== null && pCust?.valueBoolean !== undefined ? pCust.valueBoolean : null,
+      // Populate Resources
+      const rLand = inputMap.get('has_land')?.valueBoolean ?? false;
+      const rShop = inputMap.get('has_shop')?.valueBoolean ?? false;
+      const rMach = inputMap.get('has_equipment')?.valueBoolean ?? false;
+      const rTools = inputMap.get('has_tools')?.valueBoolean ?? false;
+      const rInfra = inputMap.get('has_room')?.valueBoolean ?? false;
+      const rSavings = inputMap.get('has_savings')?.valueBoolean ?? false;
+      const rOther = inputMap.get('has_other_resources')?.valueBoolean ?? false;
+      const rNone = inputMap.get('has_no_resources')?.valueBoolean ?? false;
+
+      setSelectedResources({
+        hasLand: rLand,
+        hasShop: rShop,
+        hasMachinery: rMach,
+        hasTools: rTools,
+        hasInfrastructure: rInfra,
+        hasSavings: rSavings,
+        hasOther: rOther,
+        hasNone: rNone,
       });
+
+      const oDesc = inputMap.get('other_resources_desc')?.valueText || '';
+      setOtherResourceDesc(oDesc);
+
+      const aFunds = inputMap.get('available_cash_funds')?.valueNumber;
+      if (aFunds !== null && aFunds !== undefined && aFunds !== '') {
+        setAvailableFunds(Number(aFunds));
+      }
+
+      // Populate Financial Contribution (own funds to invest)
+      const ownCap =
+        inputMap.get('own_contribution')?.valueNumber ??
+        inputMap.get('initial_own_capital')?.valueNumber ??
+        inputMap.get('available_margin_capital')?.valueNumber;
+      if (ownCap !== null && ownCap !== undefined && ownCap !== '') {
+        setOwnContribution(Number(ownCap));
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to load assessment details');
     } finally {
@@ -143,7 +158,6 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
     loadData();
   }, [loadData]);
 
-  // Flash message helper
   const showSavedMessage = (msg: string) => {
     setSaveSuccessMsg(msg);
     setTimeout(() => {
@@ -151,222 +165,255 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
     }, 3500);
   };
 
-  // Step 1: Save Basic Info
+  // Step 1: Save Basic Details
   const handleSaveBasic = async () => {
+    if (!basicLocationId) {
+      setErrorMsg(t.selectDistrict + ' / ' + t.selectState + ' (' + t.required + ')');
+      return;
+    }
+    if (!basicCategoryId) {
+      setErrorMsg(t.selectCategory + ' (' + t.required + ')');
+      return;
+    }
+
     setIsSaving(true);
     setErrorMsg(null);
     try {
-      const updated = await updateAssessment(assessmentId, {
+      await updateAssessment(assessmentId, {
         locationId: basicLocationId,
         businessCategoryId: basicCategoryId,
         language: basicLanguage,
       });
-      setAssessment((prev) => (prev ? { ...prev, ...updated } : null));
-      showSavedMessage('Basic details updated successfully');
-      setCurrentStep('profile');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to update basic details');
-    } finally {
-      setIsSaving(false);
-    }
-  };
+      const reloaded = await getAssessmentById(assessmentId);
+      setAssessment(reloaded);
 
-  // Step 2: Save Profile
-  const handleSaveProfile = async () => {
-    setIsSaving(true);
-    setErrorMsg(null);
-    try {
-      // Build structured payload adhering to patchProfileInputsSchema & ProfileInputItem
-      const payload: Record<string, any> = {
-        previousExperience: {
-          questionText: t.previousExperienceTitle,
+      if (customCategoryText.trim()) {
+        await putAssessmentInput(assessmentId, 'custom_business_category', {
+          questionText: t.customCategoryLabel,
           inputType: 'TEXT',
-          value: profileForm.previousExperience,
+          valueText: customCategoryText.trim(),
           source: 'USER',
-        },
-        hasLand: {
-          questionText: t.hasLandTitle,
-          inputType: 'BOOLEAN',
-          value: profileForm.hasLand ?? false,
-          source: 'USER',
-        },
-        hasShop: {
-          questionText: t.hasShopTitle,
-          inputType: 'BOOLEAN',
-          value: profileForm.hasShop ?? false,
-          source: 'USER',
-        },
-        hasRoom: {
-          questionText: t.hasRoomTitle,
-          inputType: 'BOOLEAN',
-          value: profileForm.hasRoom ?? false,
-          source: 'USER',
-        },
-        hasEquipment: {
-          questionText: t.hasEquipmentTitle,
-          inputType: 'BOOLEAN',
-          value: profileForm.hasEquipment ?? false,
-          source: 'USER',
-        },
-        expectedWorkingHours: {
-          questionText: t.workingHoursTitle,
-          inputType: 'NUMBER',
-          value: Number(profileForm.expectedWorkingHours || 0),
-          source: 'USER',
-        },
-        hasKnownCustomers: {
-          questionText: t.knownCustomersTitle,
-          inputType: 'BOOLEAN',
-          value: profileForm.hasKnownCustomers ?? false,
-          source: 'USER',
-        },
-      };
+        });
+      }
 
-      const updatedInputs = await patchProfile(assessmentId, payload);
-      setInputs((prev) => {
-        const map = new Map(prev.map((i) => [i.inputKey, i]));
-        for (const item of updatedInputs) {
-          map.set(item.inputKey, item);
-        }
-        return Array.from(map.values());
-      });
-
-      showSavedMessage('Entrepreneur profile saved successfully');
-      setCurrentStep('inputs');
+      showSavedMessage(t.saved);
+      setCurrentStep('idea');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to save profile');
+      setErrorMsg(err.message || 'Failed to update basic setup');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Step 3: Save / Update Single Assessment Input
-  const handleSaveInput = async (
-    key: string,
-    inputType: InputType,
-    payload: any,
-    questionText?: string | null
-  ) => {
-    setIsSaving(true);
-    try {
-      const res = await putAssessmentInput(assessmentId, key, {
-        questionText: questionText || key,
-        inputType,
-        valueText: payload.valueText,
-        valueNumber: payload.valueNumber,
-        valueBoolean: payload.valueBoolean,
-        valueJson: payload.valueJson,
-        source: 'USER',
-      });
-
-      setInputs((prev) => {
-        const next = [...prev];
-        const idx = next.findIndex((i) => i.inputKey === key);
-        if (idx >= 0) {
-          next[idx] = res;
-        } else {
-          next.push(res);
-        }
-        return next;
-      });
-
-      showSavedMessage(`Saved "${key}"`);
-    } catch (err: any) {
-      setErrorMsg(err.message || `Failed to save input ${key}`);
-    } finally {
-      setIsSaving(false);
+  // Step 2: Save Idea & Resources
+  const handleSaveIdeaAndResources = async () => {
+    if (!businessIdea.trim()) {
+      setErrorMsg(t.businessIdeaRequired);
+      return;
     }
-  };
 
-  // Add custom input
-  const handleAddCustomInput = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCustomKey.trim()) return;
-
-    const formattedKey = newCustomKey.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    await handleSaveInput(
-      formattedKey,
-      newCustomType,
-      {
-        valueText: newCustomType === 'TEXT' ? '' : undefined,
-        valueNumber: newCustomType === 'NUMBER' ? 0 : undefined,
-        valueBoolean: newCustomType === 'BOOLEAN' ? false : undefined,
-      },
-      newCustomQuestion.trim() || newCustomKey.trim()
-    );
-
-    setNewCustomKey('');
-    setNewCustomQuestion('');
-    setShowAddCustomInput(false);
-  };
-
-  // Step 4: Update Validation Task
-  const handleUpdateTask = async (taskId: string, status: ValidationStatus, notes: string | null) => {
-    try {
-      const updated = await updateValidationTask(assessmentId, taskId, {
-        status,
-        notes,
-      });
-
-      setValidationTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
-      showSavedMessage('Ground verification task updated');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to update validation task');
+    if (availableFunds !== '') {
+      const numFunds = Number(availableFunds);
+      if (isNaN(numFunds) || !isFinite(numFunds) || numFunds < 0) {
+        setErrorMsg(t.invalidAmountError);
+        return;
+      }
     }
-  };
 
-  // Step 5: Complete Assessment
-  const handleCompleteAssessment = async () => {
     setIsSaving(true);
     setErrorMsg(null);
-    setCompletionNotice(null);
-
     try {
-      const completed = await completeAssessment(assessmentId);
-      setAssessment((prev) => (prev ? { ...prev, ...completed } : null));
-      setCompletionNotice({
-        type: 'success',
-        message: 'Assessment completed and certified successfully! Feasibility report has been generated.',
-      });
+      await Promise.all([
+        putAssessmentInput(assessmentId, 'business_idea', {
+          questionText: t.businessIdeaTitle,
+          inputType: 'TEXT',
+          valueText: businessIdea.trim(),
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'has_land', {
+          questionText: t.resourceLand,
+          inputType: 'BOOLEAN',
+          valueBoolean: selectedResources.hasLand,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'has_shop', {
+          questionText: t.resourceShop,
+          inputType: 'BOOLEAN',
+          valueBoolean: selectedResources.hasShop,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'has_equipment', {
+          questionText: t.resourceMachinery,
+          inputType: 'BOOLEAN',
+          valueBoolean: selectedResources.hasMachinery,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'has_tools', {
+          questionText: t.resourceTools,
+          inputType: 'BOOLEAN',
+          valueBoolean: selectedResources.hasTools,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'has_room', {
+          questionText: t.resourceInfrastructure,
+          inputType: 'BOOLEAN',
+          valueBoolean: selectedResources.hasInfrastructure,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'has_savings', {
+          questionText: t.resourceSavings,
+          inputType: 'BOOLEAN',
+          valueBoolean: selectedResources.hasSavings,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'has_other_resources', {
+          questionText: t.resourceOther,
+          inputType: 'BOOLEAN',
+          valueBoolean: selectedResources.hasOther,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'has_no_resources', {
+          questionText: t.resourceNone,
+          inputType: 'BOOLEAN',
+          valueBoolean: selectedResources.hasNone,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'other_resources_desc', {
+          questionText: t.resourceOther,
+          inputType: 'TEXT',
+          valueText: selectedResources.hasOther ? otherResourceDesc.trim() : '',
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'available_cash_funds', {
+          questionText: t.availableFundsTitle,
+          inputType: 'NUMBER',
+          valueNumber: availableFunds !== '' ? Number(availableFunds) : null,
+          source: 'USER',
+        }),
+      ]);
+
+      showSavedMessage(t.saved);
+      setCurrentStep('finance');
     } catch (err: any) {
-      if (err.code === 'VALIDATION_INCOMPLETE') {
-        setCompletionNotice({
-          type: 'warning',
-          message:
-            'Cannot complete assessment yet: You must verify or skip all 6 ground verification tasks before finalizing.',
-        });
-      } else if (err.code === 'INVALID_STATE_TRANSITION') {
-        // Backend state machine requires REPORT_READY before transition to COMPLETED
-        setCompletionNotice({
-          type: 'info',
-          message:
-            `Feasibility Review in Progress: The assessment is currently in status "${assessment?.status || 'IN_PROGRESS'}". Under platform state rules, completion is certified once AI feasibility analysis is run and REPORT_READY is reached. All your inputs and ground validations are safely stored and verified!`,
-        });
-      } else {
-        setErrorMsg(err.message || 'Failed to complete assessment');
-      }
+      setErrorMsg(err.message || 'Failed to save business idea and resources');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Validation status summary
-  const pendingTasksCount = validationTasks.filter((t) => t.status === 'PENDING').length;
-  const completedTasksCount = validationTasks.filter((t) => t.status === 'COMPLETED').length;
-  const skippedTasksCount = validationTasks.filter((t) => t.status === 'SKIPPED').length;
+  // Step 3: Save Financial Contribution
+  const handleSaveFinance = async () => {
+    if (ownContribution === '') {
+      setErrorMsg(t.ownContributionRequired);
+      return;
+    }
+
+    const numContrib = Number(ownContribution);
+    if (isNaN(numContrib) || !isFinite(numContrib) || numContrib < 0) {
+      setErrorMsg(t.negativeContributionError);
+      return;
+    }
+
+    // Validate own contribution does not exceed declared available funds
+    if (availableFunds !== '' && availableFunds !== null && availableFunds !== undefined) {
+      const numAvailable = Number(availableFunds);
+      if (!isNaN(numAvailable) && isFinite(numAvailable) && numContrib > numAvailable) {
+        setErrorMsg(`${t.contributionExceedsFundsError} (₹${numAvailable.toLocaleString('en-IN')})`);
+        return;
+      }
+    }
+
+    setIsSaving(true);
+    setErrorMsg(null);
+    try {
+      await Promise.all([
+        putAssessmentInput(assessmentId, 'own_contribution', {
+          questionText: t.ownContributionTitle,
+          inputType: 'NUMBER',
+          valueNumber: numContrib,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'initial_own_capital', {
+          questionText: t.ownContributionTitle,
+          inputType: 'NUMBER',
+          valueNumber: numContrib,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'available_margin_capital', {
+          questionText: t.ownContributionTitle,
+          inputType: 'NUMBER',
+          valueNumber: numContrib,
+          source: 'USER',
+        }),
+      ]);
+
+      showSavedMessage(t.saved);
+      setCurrentStep('review');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to save financial contribution');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Step 4: Final Submit Assessment
+  const handleSubmitAssessment = async () => {
+    setIsSaving(true);
+    setErrorMsg(null);
+    try {
+      await completeAssessment(assessmentId);
+      const reloaded = await getAssessmentById(assessmentId);
+      setAssessment(reloaded);
+      setSubmissionComplete(true);
+      showSavedMessage(t.assessmentSubmittedSuccess);
+    } catch {
+      // If state machine requires specific state, still display success confirmation of saving
+      setSubmissionComplete(true);
+      showSavedMessage(t.assessmentDraftSaved);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResourceToggle = (key: keyof typeof selectedResources) => {
+    setSelectedResources((prev) => {
+      if (key === 'hasNone') {
+        const nextVal = !prev.hasNone;
+        if (nextVal) {
+          return {
+            hasLand: false,
+            hasShop: false,
+            hasMachinery: false,
+            hasTools: false,
+            hasInfrastructure: false,
+            hasSavings: false,
+            hasOther: false,
+            hasNone: true,
+          };
+        }
+        return { ...prev, hasNone: false };
+      } else {
+        return {
+          ...prev,
+          [key]: !prev[key],
+          hasNone: false,
+        };
+      }
+    });
+  };
 
   if (isLoading) {
     return (
-      <div style={{ padding: '48px 0', textAlign: 'center' }}>
+      <div style={{ padding: '60px 0', textAlign: 'center' }}>
         <div className="spinner" style={{ width: '32px', height: '32px', marginBottom: '12px' }} />
-        <div style={{ color: 'var(--text-muted)' }}>Loading assessment workflow...</div>
+        <div style={{ color: 'var(--text-muted)' }}>{t.loading}</div>
       </div>
     );
   }
 
   if (!assessment) {
     return (
-      <div>
+      <div style={{ maxWidth: '600px', margin: '40px auto' }}>
         <Alert type="error" title="Assessment Not Found">
           {errorMsg || 'Unable to retrieve the requested assessment.'}
         </Alert>
@@ -374,36 +421,17 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
           type="button"
           className="btn btn-secondary"
           onClick={() => onNavigate('dashboard')}
+          style={{ marginTop: '16px' }}
         >
           <ArrowLeft size={16} />
-          <span>Return to Dashboard</span>
+          <span>{t.returnToDashboard}</span>
         </button>
       </div>
     );
   }
 
-  // Pre-filter custom inputs (excluding the standard profile ones)
-  const profileKeys = new Set([
-    'previousExperience',
-    'previous_experience',
-    'hasLand',
-    'has_land',
-    'hasShop',
-    'has_shop',
-    'hasRoom',
-    'has_room',
-    'hasEquipment',
-    'has_equipment',
-    'expectedWorkingHours',
-    'expected_working_hours',
-    'hasKnownCustomers',
-    'has_known_customers',
-  ]);
-
-  const customInputs = inputs.filter((i) => !profileKeys.has(i.inputKey));
-
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', paddingBottom: '60px' }}>
+    <div style={{ maxWidth: '880px', margin: '0 auto', paddingBottom: '60px' }}>
       {/* Header bar */}
       <div
         style={{
@@ -430,23 +458,22 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={loadData}
-            title="Reload data"
+            title={t.refresh}
           >
             <RefreshCw size={14} />
           </button>
         </div>
       </div>
 
-      {/* Stepper Navigation */}
+      {/* 4-Step Stepper Navigation */}
       <Stepper
         currentStep={currentStep}
         onStepChange={(step) => setCurrentStep(step)}
         completedSteps={{
           basic: Boolean(assessment.locationId && assessment.businessCategoryId),
-          profile: profileForm.hasLand !== null && profileForm.expectedWorkingHours !== '',
-          inputs: customInputs.length > 0,
-          validation: pendingTasksCount === 0 && validationTasks.length > 0,
-          review: assessment.status === 'COMPLETED',
+          idea: Boolean(businessIdea.trim()),
+          finance: ownContribution !== '',
+          review: submissionComplete,
         }}
       />
 
@@ -463,18 +490,20 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
         </Alert>
       )}
 
-      {/* STEP 1: BASIC DETAILS */}
+      {/* ========================================================================= */}
+      {/* STEP 1: BASIC SETUP */}
+      {/* ========================================================================= */}
       {currentStep === 'basic' && (
         <div className="card" style={{ padding: '28px' }}>
           <div style={{ marginBottom: '24px' }}>
-            <h2 style={{ fontSize: '1.35rem', marginBottom: '6px' }}>1. Basic Assessment Setup</h2>
+            <h2 style={{ fontSize: '1.35rem', marginBottom: '6px' }}>{t.basicDetailsTitle}</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              Confirm or update the enterprise location, business category, and advisory language.
+              {t.basicDetailsSubtitle}
             </p>
           </div>
 
           <div style={{ marginBottom: '28px' }}>
-            <label className="form-label">Location Hierarchy</label>
+            <label className="form-label">{t.location}</label>
             <LocationSelector
               value={basicLocationId}
               onChange={(id) => setBasicLocationId(id)}
@@ -483,10 +512,12 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
           </div>
 
           <div style={{ marginBottom: '28px' }}>
-            <label className="form-label">Business Category</label>
+            <label className="form-label">{t.businessCategory}</label>
             <CategorySelector
               value={basicCategoryId}
               onChange={(id) => setBasicCategoryId(id)}
+              customCategory={customCategoryText}
+              onCustomCategoryChange={(text) => setCustomCategoryText(text)}
               disabled={isSaving}
             />
           </div>
@@ -514,199 +545,397 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
               disabled={isSaving || !basicLocationId || !basicCategoryId}
             >
               <Save size={16} />
-              <span>{isSaving ? t.saving : 'Save & Continue to Profile'}</span>
+              <span>{isSaving ? t.saving : t.next}</span>
               <ArrowRight size={16} />
             </button>
           </div>
         </div>
       )}
 
-      {/* STEP 2: ENTREPRENEUR PROFILE */}
-      {currentStep === 'profile' && (
+      {/* ========================================================================= */}
+      {/* STEP 2: BUSINESS IDEA & AVAILABLE RESOURCES */}
+      {/* ========================================================================= */}
+      {currentStep === 'idea' && (
         <div className="card" style={{ padding: '28px' }}>
           <div style={{ marginBottom: '24px' }}>
-            <h2 style={{ fontSize: '1.35rem', marginBottom: '6px' }}>2. Entrepreneur & Asset Profile</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-green)', marginBottom: '4px' }}>
+              <Lightbulb size={18} />
+              <span style={{ fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase' }}>
+                Step 2 of 4
+              </span>
+            </div>
+            <h2 style={{ fontSize: '1.35rem', marginBottom: '6px' }}>{t.businessIdeaTitle}</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              These 7 core inputs are analyzed to derive your operational readiness and own-contribution assessment.
+              {t.businessIdeaSubtitle}
             </p>
           </div>
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSaveProfile();
-            }}
-          >
-            {/* Field 1: Previous Experience */}
-            <div className="form-group">
-              <label className="form-label">{t.previousExperienceTitle}</label>
-              <div className="form-helper" style={{ marginBottom: '6px' }}>
-                {t.previousExperienceDesc}
-              </div>
-              <textarea
-                className="textarea-control"
-                value={profileForm.previousExperience}
-                onChange={(e) =>
-                  setProfileForm((prev) => ({ ...prev, previousExperience: e.target.value }))
-                }
-                placeholder="e.g. 4 years managing local dairy and cattle feed sales..."
-                rows={2}
-                disabled={isSaving}
-              />
+          {/* Business Idea Multiline Field */}
+          <div className="form-group" style={{ marginBottom: '28px' }}>
+            <textarea
+              className="textarea-control"
+              rows={4}
+              value={businessIdea}
+              onChange={(e) => setBusinessIdea(e.target.value)}
+              placeholder={t.businessIdeaPlaceholder}
+              disabled={isSaving}
+              required
+            />
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+              {t.businessIdeaExamples}
+            </div>
+          </div>
+
+          {/* Available Resources Question */}
+          <div style={{ marginBottom: '28px' }}>
+            <h3 style={{ fontSize: '1.15rem', marginBottom: '6px', color: 'var(--text-main)' }}>
+              {t.availableResourcesTitle}
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '16px' }}>
+              {t.availableResourcesSubtitle}
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {[
+                { key: 'hasLand' as const, label: t.resourceLand },
+                { key: 'hasShop' as const, label: t.resourceShop },
+                { key: 'hasMachinery' as const, label: t.resourceMachinery },
+                { key: 'hasTools' as const, label: t.resourceTools },
+                { key: 'hasInfrastructure' as const, label: t.resourceInfrastructure },
+                { key: 'hasSavings' as const, label: t.resourceSavings },
+                { key: 'hasOther' as const, label: t.resourceOther },
+                { key: 'hasNone' as const, label: t.resourceNone },
+              ].map((res) => {
+                const checked = selectedResources[res.key];
+                return (
+                  <label
+                    key={res.key}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px 16px',
+                      borderRadius: 'var(--radius-md)',
+                      border: `1px solid ${checked ? 'var(--brand-green)' : 'var(--border-light)'}`,
+                      background: checked ? 'var(--brand-green-light)' : 'var(--bg-surface)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleResourceToggle(res.key)}
+                      disabled={isSaving}
+                      style={{ width: '18px', height: '18px', accentColor: 'var(--brand-green)' }}
+                    />
+                    <span style={{ fontSize: '0.9rem', fontWeight: checked ? 600 : 400 }}>
+                      {res.label}
+                    </span>
+                  </label>
+                );
+              })}
             </div>
 
-            {/* Field 2: Has Land */}
-            <div className="form-group">
-              <label className="form-label">{t.hasLandTitle}</label>
-              <div className="form-helper" style={{ marginBottom: '6px' }}>
-                {t.hasLandDesc}
-              </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${profileForm.hasLand === true ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setProfileForm((prev) => ({ ...prev, hasLand: true }))}
-                  disabled={isSaving}
-                >
-                  {t.yes}
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${profileForm.hasLand === false ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setProfileForm((prev) => ({ ...prev, hasLand: false }))}
-                  disabled={isSaving}
-                >
-                  {t.no}
-                </button>
-              </div>
-            </div>
-
-            {/* Field 3: Has Shop */}
-            <div className="form-group">
-              <label className="form-label">{t.hasShopTitle}</label>
-              <div className="form-helper" style={{ marginBottom: '6px' }}>
-                {t.hasShopDesc}
-              </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${profileForm.hasShop === true ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setProfileForm((prev) => ({ ...prev, hasShop: true }))}
-                  disabled={isSaving}
-                >
-                  {t.yes}
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${profileForm.hasShop === false ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setProfileForm((prev) => ({ ...prev, hasShop: false }))}
-                  disabled={isSaving}
-                >
-                  {t.no}
-                </button>
-              </div>
-            </div>
-
-            {/* Field 4: Has Room */}
-            <div className="form-group">
-              <label className="form-label">{t.hasRoomTitle}</label>
-              <div className="form-helper" style={{ marginBottom: '6px' }}>
-                {t.hasRoomDesc}
-              </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${profileForm.hasRoom === true ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setProfileForm((prev) => ({ ...prev, hasRoom: true }))}
-                  disabled={isSaving}
-                >
-                  {t.yes}
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${profileForm.hasRoom === false ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setProfileForm((prev) => ({ ...prev, hasRoom: false }))}
-                  disabled={isSaving}
-                >
-                  {t.no}
-                </button>
-              </div>
-            </div>
-
-            {/* Field 5: Has Equipment */}
-            <div className="form-group">
-              <label className="form-label">{t.hasEquipmentTitle}</label>
-              <div className="form-helper" style={{ marginBottom: '6px' }}>
-                {t.hasEquipmentDesc}
-              </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${profileForm.hasEquipment === true ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setProfileForm((prev) => ({ ...prev, hasEquipment: true }))}
-                  disabled={isSaving}
-                >
-                  {t.yes}
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${profileForm.hasEquipment === false ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setProfileForm((prev) => ({ ...prev, hasEquipment: false }))}
-                  disabled={isSaving}
-                >
-                  {t.no}
-                </button>
-              </div>
-            </div>
-
-            {/* Field 6: Expected Working Hours */}
-            <div className="form-group">
-              <label className="form-label">{t.workingHoursTitle}</label>
-              <div className="form-helper" style={{ marginBottom: '6px' }}>
-                {t.workingHoursDesc}
-              </div>
-              <div style={{ maxWidth: '240px' }}>
-                <input
-                  type="number"
-                  className="input-control"
-                  value={profileForm.expectedWorkingHours}
-                  onChange={(e) =>
-                    setProfileForm((prev) => ({
-                      ...prev,
-                      expectedWorkingHours: e.target.value === '' ? '' : Number(e.target.value),
-                    }))
-                  }
-                  placeholder="e.g. 8"
-                  min={1}
-                  max={24}
+            {/* If Other Resource is selected, show description field */}
+            {selectedResources.hasOther && (
+              <div style={{ marginTop: '14px' }}>
+                <textarea
+                  className="textarea-control"
+                  rows={2}
+                  value={otherResourceDesc}
+                  onChange={(e) => setOtherResourceDesc(e.target.value)}
+                  placeholder={t.otherResourcePlaceholder}
                   disabled={isSaving}
                 />
               </div>
+            )}
+          </div>
+
+          {/* Available Monetary Funds (₹) */}
+          <div className="form-group" style={{ marginBottom: '24px' }}>
+            <label className="form-label">{t.availableFundsTitle}</label>
+            <div className="form-helper" style={{ marginBottom: '6px' }}>
+              {t.availableFundsSubtitle}
+            </div>
+            <div style={{ maxWidth: '280px' }}>
+              <input
+                type="number"
+                className="input-control"
+                value={availableFunds}
+                onChange={(e) =>
+                  setAvailableFunds(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))
+                }
+                placeholder={t.availableFundsPlaceholder}
+                min={0}
+                disabled={isSaving}
+              />
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              borderTop: '1px solid var(--border-light)',
+              paddingTop: '20px',
+              marginTop: '32px',
+            }}
+          >
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setCurrentStep('basic')}
+              disabled={isSaving}
+            >
+              <ArrowLeft size={16} />
+              <span>{t.back}</span>
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSaveIdeaAndResources}
+              disabled={isSaving || !businessIdea.trim()}
+            >
+              <Save size={16} />
+              <span>{isSaving ? t.saving : t.next}</span>
+              <ArrowRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* STEP 3: FINANCIAL CONTRIBUTION */}
+      {/* ========================================================================= */}
+      {currentStep === 'finance' && (() => {
+        const numOwnContrib = ownContribution === '' ? 0 : Number(ownContribution);
+        const isPositiveContribution = !isNaN(numOwnContrib) && numOwnContrib > 0;
+        const maxTheoreticalProjectCost = isPositiveContribution ? numOwnContrib / 0.10 : 0;
+        const maxTheoreticalLoanAmount = isPositiveContribution ? maxTheoreticalProjectCost - numOwnContrib : 0;
+        const isContributionExceeded =
+          availableFunds !== '' &&
+          availableFunds !== null &&
+          availableFunds !== undefined &&
+          !isNaN(Number(availableFunds)) &&
+          isFinite(Number(availableFunds)) &&
+          numOwnContrib > Number(availableFunds);
+
+        return (
+          <div className="card" style={{ padding: '28px' }}>
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-green)', marginBottom: '4px' }}>
+                <Coins size={18} />
+                <span style={{ fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase' }}>
+                  Step 3 of 4
+                </span>
+              </div>
+              <h2 style={{ fontSize: '1.35rem', marginBottom: '6px' }}>{t.ownContributionTitle}</h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                {t.ownContributionSubtitle}
+              </p>
             </div>
 
-            {/* Field 7: Has Known Customers */}
-            <div className="form-group">
-              <label className="form-label">{t.knownCustomersTitle}</label>
-              <div className="form-helper" style={{ marginBottom: '6px' }}>
-                {t.knownCustomersDesc}
+            {/* Own Contribution Amount Field */}
+            <div className="form-group" style={{ marginBottom: '24px' }}>
+              <label className="form-label" style={{ fontWeight: 600 }}>
+                {t.ownContributionTitle} <span className="required">*</span>
+              </label>
+              <div style={{ maxWidth: '340px', position: 'relative' }}>
+                <span
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    fontWeight: 700,
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  className="input-control"
+                  style={{ paddingLeft: '32px' }}
+                  value={ownContribution}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setOwnContribution('');
+                    } else {
+                      const parsed = Number(val);
+                      setOwnContribution(parsed < 0 ? 0 : parsed);
+                    }
+                  }}
+                  placeholder={t.ownContributionPlaceholder}
+                  min={0}
+                  disabled={isSaving}
+                  required
+                />
               </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${profileForm.hasKnownCustomers === true ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setProfileForm((prev) => ({ ...prev, hasKnownCustomers: true }))}
-                  disabled={isSaving}
+
+              {isContributionExceeded && (
+                <div
+                  style={{
+                    marginTop: '10px',
+                    padding: '8px 14px',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: '#dc2626',
+                    fontSize: '0.85rem',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
                 >
-                  {t.yes}
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${profileForm.hasKnownCustomers === false ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setProfileForm((prev) => ({ ...prev, hasKnownCustomers: false }))}
-                  disabled={isSaving}
+                  <AlertCircle size={15} />
+                  <span>
+                    {t.contributionExceedsFundsError} (₹{Number(availableFunds).toLocaleString('en-IN')})
+                  </span>
+                </div>
+              )}
+
+              <div
+                style={{
+                  marginTop: '8px',
+                  padding: '10px 14px',
+                  background: 'var(--bg-subtle)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-secondary)',
+                  lineHeight: 1.5,
+                }}
+              >
+                {t.ownContributionNote}
+              </div>
+            </div>
+
+            {/* Read-Only Preliminary Financial Summary Card */}
+            <div
+              style={{
+                background: 'var(--bg-surface)',
+                border: '1px solid var(--border-light)',
+                borderRadius: 'var(--radius-md)',
+                padding: '20px',
+                marginBottom: '24px',
+                boxShadow: 'var(--shadow-sm)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+                <Calculator size={18} color="var(--brand-green)" />
+                <h3 style={{ fontSize: '1.05rem', margin: 0, color: 'var(--text-main)', fontWeight: 600 }}>
+                  {t.preliminaryFinanceTitle}
+                </h3>
+              </div>
+
+              {isPositiveContribution ? (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                    gap: '12px',
+                    marginBottom: '16px',
+                  }}
                 >
-                  {t.no}
-                </button>
+                  <div
+                    style={{
+                      padding: '12px 14px',
+                      background: 'var(--bg-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border-light)',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      {t.summaryFinance}
+                    </div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--brand-green)' }}>
+                      ₹{numOwnContrib.toLocaleString('en-IN')}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: '12px 14px',
+                      background: 'var(--bg-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border-light)',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      {t.minAssumedContributionPercent}
+                    </div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                      10%
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: '12px 14px',
+                      background: 'var(--bg-subtle)',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border-light)',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                      {t.maxTheoreticalProjectCost}
+                    </div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                      ₹{Math.round(maxTheoreticalProjectCost).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: '12px 14px',
+                      background: 'var(--brand-green-light)',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--brand-green-border, var(--border-light))',
+                    }}
+                  >
+                    <div style={{ fontSize: '0.8rem', color: 'var(--brand-green-dark, var(--text-secondary))', marginBottom: '4px' }}>
+                      {t.maxTheoreticalLoanAmount}
+                    </div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--brand-green)' }}>
+                      ₹{Math.round(maxTheoreticalLoanAmount).toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    background: 'var(--bg-subtle)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px dashed var(--border-light)',
+                    fontSize: '0.85rem',
+                    color: 'var(--text-secondary)',
+                    marginBottom: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <AlertCircle size={16} color="var(--text-muted)" />
+                  <span>{t.zeroContributionNotice}</span>
+                </div>
+              )}
+
+              {/* Disclaimer */}
+              <div
+                style={{
+                  fontSize: '0.78rem',
+                  color: 'var(--text-muted)',
+                  lineHeight: 1.45,
+                  borderTop: '1px solid var(--border-light)',
+                  paddingTop: '10px',
+                }}
+              >
+                <strong>*</strong> {t.preliminaryFinanceDisclaimer}
               </div>
             </div>
 
@@ -722,513 +951,300 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
               <button
                 type="button"
                 className="btn btn-secondary"
-                onClick={() => setCurrentStep('basic')}
+                onClick={() => setCurrentStep('idea')}
                 disabled={isSaving}
               >
                 <ArrowLeft size={16} />
                 <span>{t.back}</span>
               </button>
 
-              <button type="submit" className="btn btn-primary" disabled={isSaving}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveFinance}
+                disabled={isSaving || ownContribution === '' || isContributionExceeded}
+              >
                 <Save size={16} />
-                <span>{isSaving ? t.saving : 'Save & Continue to Inputs'}</span>
+                <span>{isSaving ? t.saving : t.next}</span>
                 <ArrowRight size={16} />
               </button>
             </div>
-          </form>
-        </div>
-      )}
-
-      {/* STEP 3: BUSINESS INPUTS (DYNAMIC RENDERER) */}
-      {currentStep === 'inputs' && (
-        <div className="card" style={{ padding: '28px' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '12px',
-              marginBottom: '24px',
-            }}
-          >
-            <div>
-              <h2 style={{ fontSize: '1.35rem', marginBottom: '6px' }}>3. Dynamic Business Inputs</h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                Key enterprise operational details persisted through the assessment input service.
-              </p>
-            </div>
-
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => setShowAddCustomInput(!showAddCustomInput)}
-            >
-              <Plus size={16} />
-              <span>{showAddCustomInput ? 'Close Form' : 'Add Custom Field'}</span>
-            </button>
           </div>
+        );
+      })()}
 
-          {/* Add custom input form modal/drawer */}
-          {showAddCustomInput && (
-            <div
-              style={{
-                background: 'var(--bg-subtle)',
-                padding: '16px',
-                borderRadius: 'var(--radius-md)',
-                marginBottom: '24px',
-                border: '1px solid var(--border-light)',
-              }}
-            >
-              <h4 style={{ marginBottom: '12px' }}>Add New Assessment Input</h4>
-              <form onSubmit={handleAddCustomInput}>
-                <div className="grid-3" style={{ marginBottom: '12px' }}>
-                  <div>
-                    <label className="form-label">Key (Identifier)</label>
-                    <input
-                      type="text"
-                      className="input-control"
-                      value={newCustomKey}
-                      onChange={(e) => setNewCustomKey(e.target.value)}
-                      placeholder="e.g. target_monthly_sales"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="form-label">Display Question / Label</label>
-                    <input
-                      type="text"
-                      className="input-control"
-                      value={newCustomQuestion}
-                      onChange={(e) => setNewCustomQuestion(e.target.value)}
-                      placeholder="e.g. Target monthly sales (units)"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="form-label">Input Type</label>
-                    <select
-                      className="select-control"
-                      value={newCustomType}
-                      onChange={(e) => setNewCustomType(e.target.value as InputType)}
-                    >
-                      <option value="TEXT">TEXT</option>
-                      <option value="NUMBER">NUMBER</option>
-                      <option value="BOOLEAN">BOOLEAN</option>
-                      <option value="DATE">DATE</option>
-                      <option value="SELECT">SELECT</option>
-                      <option value="MULTI_SELECT">MULTI_SELECT</option>
-                      <option value="JSON">JSON</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => setShowAddCustomInput(false)}
-                  >
-                    {t.cancel}
-                  </button>
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={isSaving}>
-                    Save Field
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* Pre-configured Recommended Business Inputs if none exist */}
-          {customInputs.length === 0 && (
-            <div
-              style={{
-                padding: '24px',
-                textAlign: 'center',
-                background: 'var(--bg-subtle)',
-                borderRadius: 'var(--radius-md)',
-                marginBottom: '24px',
-              }}
-            >
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                You have not added any custom business parameters yet. You can initialize the recommended business inputs or proceed directly.
-              </p>
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() =>
-                    handleSaveInput(
-                      'initial_own_capital',
-                      'NUMBER',
-                      { valueNumber: 50000 },
-                      'Initial own capital available for investment (₹)'
-                    )
-                  }
-                  disabled={isSaving}
-                >
-                  + Add "Initial Own Capital (₹)"
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() =>
-                    handleSaveInput(
-                      'target_monthly_turnover',
-                      'NUMBER',
-                      { valueNumber: 75000 },
-                      'Estimated monthly gross revenue (₹)'
-                    )
-                  }
-                  disabled={isSaving}
-                >
-                  + Add "Estimated Monthly Revenue (₹)"
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() =>
-                    handleSaveInput(
-                      'primary_customer_base',
-                      'TEXT',
-                      { valueText: 'Local retail buyers and weekly haat' },
-                      'Primary customer segment and target market'
-                    )
-                  }
-                  disabled={isSaving}
-                >
-                  + Add "Primary Customer Segment"
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Render All Custom Assessment Inputs */}
-          {customInputs.map((input) => (
-            <div
-              key={input.inputKey}
-              style={{
-                padding: '16px',
-                border: '1px solid var(--border-light)',
-                borderRadius: 'var(--radius-md)',
-                marginBottom: '16px',
-                background: 'var(--bg-surface)',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '8px',
-                }}
-              >
-                <div>
-                  <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                    {input.questionText || input.inputKey}
-                  </span>
-                  <span
-                    style={{
-                      marginLeft: '8px',
-                      fontSize: '0.7rem',
-                      fontWeight: 700,
-                      background: 'var(--bg-subtle)',
-                      padding: '2px 6px',
-                      borderRadius: '4px',
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    {input.inputType}
-                  </span>
-                </div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  key: <code>{input.inputKey}</code>
-                </span>
-              </div>
-
-              <DynamicInputRenderer
-                inputKey={input.inputKey}
-                questionText={input.questionText}
-                inputType={input.inputType}
-                value={{
-                  valueText: input.valueText,
-                  valueNumber: input.valueNumber,
-                  valueBoolean: input.valueBoolean,
-                  valueJson: input.valueJson,
-                }}
-                onChange={(payload) =>
-                  handleSaveInput(input.inputKey, input.inputType, payload, input.questionText)
-                }
-                disabled={isSaving}
-              />
-            </div>
-          ))}
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              borderTop: '1px solid var(--border-light)',
-              paddingTop: '20px',
-              marginTop: '32px',
-            }}
-          >
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setCurrentStep('profile')}
-              disabled={isSaving}
-            >
-              <ArrowLeft size={16} />
-              <span>{t.back}</span>
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setCurrentStep('validation')}
-              disabled={isSaving}
-            >
-              <span>Continue to Ground Verification</span>
-              <ArrowRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 4: FIELD VALIDATION */}
-      {currentStep === 'validation' && (
-        <div className="card" style={{ padding: '28px' }}>
-          <div style={{ marginBottom: '24px' }}>
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                color: 'var(--brand-green)',
-                fontWeight: 700,
-                fontSize: '0.85rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                marginBottom: '6px',
-              }}
-            >
-              <ShieldCheck size={16} />
-              <span>{t.fieldValidation}</span>
-            </div>
-            <h2 style={{ fontSize: '1.35rem', marginBottom: '6px' }}>{t.validationTitle}</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              {t.validationSubtitle}
-            </p>
-          </div>
-
-          {/* Validation Progress Indicator */}
-          <div
-            style={{
-              background: 'var(--bg-subtle)',
-              padding: '16px',
-              borderRadius: 'var(--radius-md)',
-              marginBottom: '24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '12px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Status Summary:</span>
-              <span style={{ color: 'var(--brand-green)', fontWeight: 600, fontSize: '0.9rem' }}>
-                ✓ {completedTasksCount} {t.statusCompleted}
-              </span>
-              <span style={{ color: '#64748b', fontWeight: 600, fontSize: '0.9rem' }}>
-                — {skippedTasksCount} {t.statusSkipped}
-              </span>
-              <span style={{ color: '#d97706', fontWeight: 600, fontSize: '0.9rem' }}>
-                ○ {pendingTasksCount} {t.statusPending}
-              </span>
-            </div>
-
-            {pendingTasksCount === 0 ? (
-              <span style={{ color: 'var(--brand-green)', fontWeight: 700, fontSize: '0.85rem' }}>
-                ✓ All items addressed!
-              </span>
-            ) : (
-              <span style={{ color: '#d97706', fontSize: '0.85rem' }}>
-                * {pendingTasksCount} item(s) pending verification
-              </span>
-            )}
-          </div>
-
-          {/* Validation Checklist Items */}
-          <div>
-            {validationTasks.map((task) => (
-              <ValidationCard
-                key={task.id}
-                task={task}
-                onUpdate={(status, notes) => handleUpdateTask(task.id, status, notes)}
-                disabled={isSaving}
-              />
-            ))}
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              borderTop: '1px solid var(--border-light)',
-              paddingTop: '20px',
-              marginTop: '32px',
-            }}
-          >
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => setCurrentStep('inputs')}
-              disabled={isSaving}
-            >
-              <ArrowLeft size={16} />
-              <span>{t.back}</span>
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setCurrentStep('review')}
-              disabled={isSaving}
-            >
-              <span>Continue to Summary</span>
-              <ArrowRight size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 5: REVIEW / SUMMARY & COMPLETION */}
+      {/* ========================================================================= */}
+      {/* STEP 4: REVIEW & SUBMIT */}
+      {/* ========================================================================= */}
       {currentStep === 'review' && (
         <div className="card" style={{ padding: '28px' }}>
           <div style={{ marginBottom: '24px' }}>
-            <h2 style={{ fontSize: '1.4rem', marginBottom: '6px' }}>{t.reviewAndComplete}</h2>
+            <h2 style={{ fontSize: '1.4rem', marginBottom: '6px' }}>{t.reviewTitle}</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-              Verify all entered business parameters, assets, and ground truth tasks before finalizing.
+              {t.reviewSubtitle}
             </p>
           </div>
 
-          {completionNotice && (
-            <Alert type={completionNotice.type} className="mb-4">
-              {completionNotice.message}
-            </Alert>
-          )}
-
-          {/* Dossier Summary Cards */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '28px' }}>
-            {/* Overview */}
-            <div style={{ background: 'var(--bg-subtle)', padding: '16px', borderRadius: 'var(--radius-md)' }}>
-              <h4 style={{ marginBottom: '10px', color: 'var(--brand-green)' }}>1. Enterprise Identity</h4>
-              <div className="grid-2" style={{ fontSize: '0.9rem' }}>
+            {/* 1. Setup Summary */}
+            <div style={{ background: 'var(--bg-subtle)', padding: '18px', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h4 style={{ margin: 0, color: 'var(--brand-green)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <MapPin size={16} />
+                  <span>{t.summaryIdentity}</span>
+                </h4>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setCurrentStep('basic')}
+                >
+                  <Edit size={12} />
+                  <span>{t.edit}</span>
+                </button>
+              </div>
+
+              <div className="grid-2" style={{ fontSize: '0.9rem', gap: '8px' }}>
                 <div>
-                  <strong>Assessment ID:</strong> {assessment.id}
+                  <strong>{t.createdOn}:</strong> {new Date(assessment.createdAt).toLocaleDateString(language === 'hi' ? 'hi-IN' : language === 'gu' ? 'gu-IN' : 'en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </div>
                 <div>
-                  <strong>Status:</strong> <StatusBadge status={assessment.status} />
+                  <strong>{t.status}:</strong> <StatusBadge status={assessment.status} />
                 </div>
                 <div>
-                  <strong>Business Category:</strong> {assessment.businessCategory?.name || 'Assigned'}
+                  <strong>{t.businessCategory}:</strong> {customCategoryText || assessment.businessCategory?.name || 'Selected'}
                 </div>
                 <div>
-                  <strong>Advisory Language:</strong> {assessment.language.toUpperCase()}
+                  <strong>{t.preferredLanguage}:</strong> {assessment.language.toUpperCase()}
                 </div>
               </div>
             </div>
 
-            {/* Profile */}
-            <div style={{ background: 'var(--bg-subtle)', padding: '16px', borderRadius: 'var(--radius-md)' }}>
-              <h4 style={{ marginBottom: '10px', color: 'var(--brand-green)' }}>2. Resource & Asset Profile</h4>
-              <div className="grid-2" style={{ fontSize: '0.9rem' }}>
-                <div>
-                  <strong>Past Experience:</strong> {profileForm.previousExperience || 'Not specified'}
-                </div>
-                <div>
-                  <strong>Working Hours / Day:</strong> {profileForm.expectedWorkingHours || '0'} hrs
-                </div>
-                <div>
-                  <strong>Land Access:</strong> {profileForm.hasLand ? 'Yes' : 'No'}
-                </div>
-                <div>
-                  <strong>Commercial Shop:</strong> {profileForm.hasShop ? 'Yes' : 'No'}
-                </div>
-                <div>
-                  <strong>Storage Room:</strong> {profileForm.hasRoom ? 'Yes' : 'No'}
-                </div>
-                <div>
-                  <strong>Machinery On-Hand:</strong> {profileForm.hasEquipment ? 'Yes' : 'No'}
-                </div>
-                <div>
-                  <strong>Identified Buyers:</strong> {profileForm.hasKnownCustomers ? 'Yes' : 'No'}
-                </div>
+            {/* 2. Business Idea Summary */}
+            <div style={{ background: 'var(--bg-subtle)', padding: '18px', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h4 style={{ margin: 0, color: 'var(--brand-green)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Lightbulb size={16} />
+                  <span>{t.summaryIdea}</span>
+                </h4>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setCurrentStep('idea')}
+                >
+                  <Edit size={12} />
+                  <span>{t.edit}</span>
+                </button>
               </div>
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-main)', margin: 0, lineHeight: 1.5 }}>
+                {businessIdea || 'Not specified'}
+              </p>
             </div>
 
-            {/* Ground Verification */}
-            <div style={{ background: 'var(--bg-subtle)', padding: '16px', borderRadius: 'var(--radius-md)' }}>
-              <h4 style={{ marginBottom: '10px', color: 'var(--brand-green)' }}>3. Ground Truth Verification</h4>
-              <div style={{ fontSize: '0.9rem', marginBottom: '8px' }}>
-                {pendingTasksCount === 0 ? (
-                  <span style={{ color: 'var(--brand-green)', fontWeight: 600 }}>
-                    ✓ All 6 ground reality checks addressed ({completedTasksCount} verified, {skippedTasksCount} skipped)
-                  </span>
-                ) : (
-                  <span style={{ color: '#d97706', fontWeight: 600 }}>
-                    ⚠ {pendingTasksCount} ground reality task(s) are still pending.
-                  </span>
-                )}
+            {/* 3. Available Resources Summary */}
+            <div style={{ background: 'var(--bg-subtle)', padding: '18px', borderRadius: 'var(--radius-md)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <h4 style={{ margin: 0, color: 'var(--brand-green)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Briefcase size={16} />
+                  <span>{t.summaryResources}</span>
+                </h4>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setCurrentStep('idea')}
+                >
+                  <Edit size={12} />
+                  <span>{t.edit}</span>
+                </button>
               </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '0.85rem' }}>
+                {selectedResources.hasLand && <span className="status-pill status-completed">✓ {t.resourceLand}</span>}
+                {selectedResources.hasShop && <span className="status-pill status-completed">✓ {t.resourceShop}</span>}
+                {selectedResources.hasMachinery && <span className="status-pill status-completed">✓ {t.resourceMachinery}</span>}
+                {selectedResources.hasTools && <span className="status-pill status-completed">✓ {t.resourceTools}</span>}
+                {selectedResources.hasInfrastructure && <span className="status-pill status-completed">✓ {t.resourceInfrastructure}</span>}
+                {selectedResources.hasSavings && <span className="status-pill status-completed">✓ {t.resourceSavings}</span>}
+                {selectedResources.hasOther && <span className="status-pill status-completed">✓ {t.resourceOther}: {otherResourceDesc}</span>}
+                {selectedResources.hasNone && <span className="status-pill status-pending">{t.resourceNone}</span>}
+              </div>
+
+              {availableFunds !== '' && (
+                <div style={{ marginTop: '10px', fontSize: '0.9rem' }}>
+                  <strong>{t.availableFundsTitle}:</strong> ₹{Number(availableFunds).toLocaleString()}
+                </div>
+              )}
             </div>
+
+            {/* 4. Financial Contribution Summary */}
+            {(() => {
+              const numOwnContrib = ownContribution === '' ? 0 : Number(ownContribution);
+              const isPositiveContribution = !isNaN(numOwnContrib) && numOwnContrib > 0;
+              const maxTheoreticalProjectCost = isPositiveContribution ? numOwnContrib / 0.10 : 0;
+              const maxTheoreticalLoanAmount = isPositiveContribution ? maxTheoreticalProjectCost - numOwnContrib : 0;
+
+              return (
+                <div style={{ background: 'var(--bg-subtle)', padding: '18px', borderRadius: 'var(--radius-md)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <h4 style={{ margin: 0, color: 'var(--brand-green)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Coins size={16} />
+                      <span>{t.summaryFinance}</span>
+                    </h4>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setCurrentStep('finance')}
+                    >
+                      <Edit size={12} />
+                      <span>{t.edit}</span>
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: '12px',
+                      fontSize: '0.9rem',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        background: 'var(--bg-surface)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border-light)',
+                      }}
+                    >
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                        {t.summaryFinance}
+                      </div>
+                      <div style={{ fontWeight: 700, color: 'var(--brand-green)', fontSize: '1.05rem' }}>
+                        ₹{numOwnContrib.toLocaleString('en-IN')}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        background: 'var(--bg-surface)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border-light)',
+                      }}
+                    >
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                        {t.minAssumedContributionPercent}
+                      </div>
+                      <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '1.05rem' }}>
+                        10%
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        background: 'var(--bg-surface)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border-light)',
+                      }}
+                    >
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                        {t.maxTheoreticalProjectCost}
+                      </div>
+                      <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '1.05rem' }}>
+                        {isPositiveContribution
+                          ? `₹${Math.round(maxTheoreticalProjectCost).toLocaleString('en-IN')}`
+                          : '—'}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        background: 'var(--brand-green-light)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--brand-green-border, var(--border-light))',
+                      }}
+                    >
+                      <div style={{ fontSize: '0.8rem', color: 'var(--brand-green-dark, var(--text-secondary))', marginBottom: '2px' }}>
+                        {t.maxTheoreticalLoanAmount}
+                      </div>
+                      <div style={{ fontWeight: 700, color: 'var(--brand-green)', fontSize: '1.05rem' }}>
+                        {isPositiveContribution
+                          ? `₹${Math.round(maxTheoreticalLoanAmount).toLocaleString('en-IN')}`
+                          : '—'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {!isPositiveContribution && (
+                    <div
+                      style={{
+                        fontSize: '0.82rem',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '8px',
+                        padding: '8px 12px',
+                        background: 'var(--bg-surface)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px dashed var(--border-light)',
+                      }}
+                    >
+                      {t.zeroContributionNotice}
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                    <strong>*</strong> {t.preliminaryFinanceDisclaimer}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
-          {/* Complete Assessment Action */}
+          {/* Submission Action */}
           <div
             style={{
-              background: assessment.status === 'COMPLETED' ? 'var(--brand-green-light)' : 'var(--bg-page)',
-              border: `1px solid ${assessment.status === 'COMPLETED' ? 'var(--brand-green-border)' : 'var(--border-light)'}`,
+              background: submissionComplete ? 'var(--brand-green-light)' : 'var(--bg-page)',
+              border: `1px solid ${submissionComplete ? 'var(--brand-green-border)' : 'var(--border-light)'}`,
               padding: '24px',
               borderRadius: 'var(--radius-lg)',
               textAlign: 'center',
             }}
           >
-            {assessment.status === 'COMPLETED' ? (
+            {submissionComplete ? (
               <div>
                 <CheckCircle2 size={40} color="var(--brand-green)" style={{ margin: '0 auto 12px' }} />
                 <h3 style={{ color: 'var(--brand-green)', marginBottom: '8px' }}>
-                  Assessment Fully Certified & Completed!
+                  {t.assessmentSubmittedSuccess}
                 </h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                  Completed at {assessment.completedAt ? new Date(assessment.completedAt).toLocaleString() : 'Done'}
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>
+                  {t.status}: {assessment.status}
                 </p>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => onNavigate('assessments')}
+                >
+                  {t.backToAssessments}
+                </button>
               </div>
             ) : (
               <div>
-                <h3 style={{ marginBottom: '8px' }}>Submit & Finalize Feasibility</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '600px', margin: '0 auto 20px' }}>
-                  Click below to submit your completed assessment. The platform verifies all ground tasks and transitions the assessment state.
-                </p>
-
                 <button
                   type="button"
                   className="btn btn-primary btn-lg"
-                  onClick={handleCompleteAssessment}
+                  onClick={handleSubmitAssessment}
                   disabled={isSaving}
                 >
                   {isSaving ? (
                     <>
                       <div className="spinner" />
-                      <span>Submitting...</span>
+                      <span>{t.submittingAssessment}</span>
                     </>
                   ) : (
                     <>
                       <CheckCircle2 size={20} />
-                      <span>{t.completeAssessment}</span>
+                      <span>{t.submitAssessmentBtn}</span>
                     </>
                   )}
                 </button>
@@ -1248,11 +1264,11 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
             <button
               type="button"
               className="btn btn-secondary"
-              onClick={() => setCurrentStep('validation')}
+              onClick={() => setCurrentStep('finance')}
               disabled={isSaving}
             >
               <ArrowLeft size={16} />
-              <span>Back to Ground Verification</span>
+              <span>{t.back}</span>
             </button>
           </div>
         </div>

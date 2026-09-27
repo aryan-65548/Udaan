@@ -41,6 +41,8 @@ export interface AssessmentItem {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  location?: { id: string; name: string; type?: string } | null;
+  businessCategory?: { id: string; name: string; code?: string } | null;
 }
 
 export interface FinancialRun {

@@ -93,11 +93,45 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
 // GET /assessments - List user's assessments
 router.get('/', async (req: AuthenticatedRequest, res, next) => {
   try {
-    const userAssessments = await db
-      .select()
+    const rawList = await db
+      .select({
+        id: assessments.id,
+        userId: assessments.userId,
+        locationId: assessments.locationId,
+        businessCategoryId: assessments.businessCategoryId,
+        language: assessments.language,
+        status: assessments.status,
+        aiStatus: assessments.aiStatus,
+        aiSessionId: assessments.aiSessionId,
+        createdAt: assessments.createdAt,
+        updatedAt: assessments.updatedAt,
+        completedAt: assessments.completedAt,
+        locationName: locations.name,
+        locationType: locations.type,
+        categoryName: businessCategories.name,
+        categoryCode: businessCategories.code,
+      })
       .from(assessments)
+      .leftJoin(locations, eq(assessments.locationId, locations.id))
+      .leftJoin(businessCategories, eq(assessments.businessCategoryId, businessCategories.id))
       .where(eq(assessments.userId, req.user!.id))
       .orderBy(desc(assessments.createdAt));
+
+    const userAssessments = rawList.map((item: any) => {
+      const formatted: Record<string, any> = { ...item };
+      delete formatted.locationName;
+      delete formatted.locationType;
+      delete formatted.categoryName;
+      delete formatted.categoryCode;
+
+      if (item.locationName) {
+        formatted.location = { id: item.locationId, name: item.locationName, type: item.locationType };
+      }
+      if (item.categoryName) {
+        formatted.businessCategory = { id: item.businessCategoryId, name: item.categoryName, code: item.categoryCode };
+      }
+      return formatted;
+    });
 
     return res.json({ data: userAssessments });
   } catch (error) {

@@ -1,8 +1,8 @@
 import React from 'react';
-import { Check, User, MapPin, ListPlus, ShieldCheck, FileCheck } from 'lucide-react';
+import { Check, MapPin, Lightbulb, Coins, FileCheck } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 
-export type AssessmentStep = 'basic' | 'profile' | 'inputs' | 'validation' | 'review';
+export type AssessmentStep = 'basic' | 'idea' | 'finance' | 'review';
 
 interface StepperProps {
   currentStep: AssessmentStep;
@@ -22,10 +22,9 @@ export const Stepper: React.FC<StepperProps> = ({
     label: string;
     icon: React.ReactNode;
   }> = [
-    { id: 'basic', label: t.stepBasicDetails, icon: <MapPin size={16} /> },
-    { id: 'profile', label: t.stepProfile, icon: <User size={16} /> },
-    { id: 'inputs', label: t.stepInputs, icon: <ListPlus size={16} /> },
-    { id: 'validation', label: t.stepValidation, icon: <ShieldCheck size={16} /> },
+    { id: 'basic', label: t.stepBasic, icon: <MapPin size={16} /> },
+    { id: 'idea', label: t.stepIdeaResources, icon: <Lightbulb size={16} /> },
+    { id: 'finance', label: t.stepFinance, icon: <Coins size={16} /> },
     { id: 'review', label: t.stepReview, icon: <FileCheck size={16} /> },
   ];
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomBytes, randomUUID } from 'crypto';
+import { z } from 'zod';
 import { db } from '../db';
 import { users, refreshTokens } from '../db/schema';
 import { eq } from 'drizzle-orm';
@@ -41,26 +42,64 @@ router.post('/register', async (req, res, next) => {
   try {
     const data = registerSchema.parse(req.body);
 
+    if (data.email) {
+      const existingEmail = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, data.email.toLowerCase().trim()))
+        .limit(1);
+
+      if (existingEmail.length > 0) {
+        return res.status(409).json({
+          error: {
+            code: 'EMAIL_ALREADY_EXISTS',
+            message: 'An account with this email address already exists. Please sign in instead.',
+          },
+        });
+      }
+    }
+
+    if (data.phone) {
+      const existingPhone = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.phone, data.phone.trim()))
+        .limit(1);
+
+      if (existingPhone.length > 0) {
+        return res.status(409).json({
+          error: {
+            code: 'PHONE_ALREADY_EXISTS',
+            message: 'An account with this phone number already exists.',
+          },
+        });
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(data.password, 10);
     const userRole = 'ENTREPRENEUR'; // Default role
 
     let result;
     try {
       result = await db.insert(users).values({
-        name: data.name,
-        email: data.email,
-        phone: data.phone,
+        name: data.name.trim(),
+        email: data.email ? data.email.toLowerCase().trim() : undefined,
+        phone: data.phone ? data.phone.trim() : undefined,
         passwordHash: hashedPassword,
         role: userRole,
         preferredLanguage: data.preferredLanguage,
       }).returning();
     } catch (dbError: any) {
       if (dbError.code === '23505') {
+        const detail = dbError.detail || '';
+        const isEmail = detail.includes('email') || dbError.constraint?.includes('email');
         return res.status(409).json({
           error: {
-            code: 'CONFLICT',
-            message: 'A user with this email or phone already exists',
-          }
+            code: isEmail ? 'EMAIL_ALREADY_EXISTS' : 'CONFLICT',
+            message: isEmail
+              ? 'An account with this email address already exists. Please sign in instead.'
+              : 'A user with this email or phone already exists.',
+          },
         });
       }
       throw dbError;
@@ -79,10 +118,161 @@ router.post('/register', async (req, res, next) => {
           phone: user.phone,
           role: user.role,
           preferredLanguage: user.preferredLanguage,
+          createdAt: user.createdAt,
         },
         accessToken,
         refreshToken,
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/google', async (req, res, next) => {
+  try {
+    const { idToken } = z.object({ idToken: z.string().min(1) }).parse(req.body);
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      return res.status(503).json({
+        error: {
+          code: 'OAUTH_NOT_CONFIGURED',
+          message: 'Google OAuth is not configured on this server.',
+        },
+      });
+    }
+
+    // Verify Google ID Token using Google tokeninfo endpoint
+    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+    if (!response.ok) {
+      return res.status(401).json({
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Invalid or expired Google token',
+        },
+      });
+    }
+
+    const payload = (await response.json()) as {
+      sub?: string;
+      email?: string;
+      email_verified?: string | boolean;
+      name?: string;
+      picture?: string;
+      aud?: string;
+      iss?: string;
+    };
+
+    if (!payload.sub || !payload.email) {
+      return res.status(401).json({
+        error: {
+          code: 'INVALID_TOKEN',
+          message: 'Incomplete Google token payload',
+        },
+      });
+    }
+
+    if (payload.aud !== clientId) {
+      return res.status(401).json({
+        error: {
+          code: 'INVALID_AUDIENCE',
+          message: 'Google token audience mismatch',
+        },
+      });
+    }
+
+    if (payload.iss !== 'accounts.google.com' && payload.iss !== 'https://accounts.google.com') {
+      return res.status(401).json({
+        error: {
+          code: 'INVALID_ISSUER',
+          message: 'Google token issuer is invalid',
+        },
+      });
+    }
+
+    const isEmailVerified = payload.email_verified === 'true' || payload.email_verified === true;
+    if (!isEmailVerified) {
+      return res.status(400).json({
+        error: {
+          code: 'UNVERIFIED_EMAIL',
+          message: 'Google account email is not verified',
+        },
+      });
+    }
+
+    const googleId = payload.sub;
+    const email = payload.email.toLowerCase().trim();
+    const name = payload.name || email.split('@')[0];
+
+    // Check if user already exists by googleId
+    const userResult = await db.select().from(users).where(eq(users.googleId, googleId)).limit(1);
+    let user = userResult[0];
+
+    if (!user) {
+      // Check if user exists by verified email
+      const emailUserResult = await db.select().from(users).where(eq(users.email, email)).limit(1);
+      const emailUser = emailUserResult[0];
+
+      if (emailUser) {
+        // Link Google ID securely
+        const updated = await db
+          .update(users)
+          .set({ googleId, updatedAt: new Date() })
+          .where(eq(users.id, emailUser.id))
+          .returning();
+        user = updated[0];
+      } else {
+        // Create new account
+        const randomPass = randomBytes(24).toString('hex');
+        const hashedPassword = await bcrypt.hash(randomPass, 10);
+        const inserted = await db
+          .insert(users)
+          .values({
+            name,
+            email,
+            googleId,
+            passwordHash: hashedPassword,
+            role: 'ENTREPRENEUR',
+            preferredLanguage: 'en',
+          })
+          .returning();
+        user = inserted[0];
+      }
+    }
+
+    if (!user.isActive) {
+      return res.status(401).json({
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'User account is inactive',
+        },
+      });
+    }
+
+    const accessToken = jwt.sign({ userId: user.id }, getJwtSecret(), { expiresIn: ACCESS_TOKEN_EXPIRY });
+    const refreshToken = await createRefreshToken(user.id);
+
+    return res.json({
+      data: {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          preferredLanguage: user.preferredLanguage,
+          businessName: user.businessName,
+          businessCategory: user.businessCategory,
+          operatingState: user.operatingState,
+          operatingDistrict: user.operatingDistrict,
+          experienceLevel: user.experienceLevel,
+          businessBackground: user.businessBackground,
+          createdAt: user.createdAt,
+        },
+        accessToken,
+        refreshToken,
+      },
     });
   } catch (error) {
     next(error);

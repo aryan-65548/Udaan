@@ -3,7 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import type { SupportedLanguage } from '../i18n/translations';
 import { Alert } from '../components/Alert';
-import { UserPlus } from 'lucide-react';
+import { GoogleAuthButton } from '../components/GoogleAuthButton';
+import { UserPlus, LogIn, KeyRound } from 'lucide-react';
 
 interface RegisterPageProps {
   onNavigate: (view: string) => void;
@@ -21,23 +22,25 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isDuplicateEmail, setIsDuplicateEmail] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setIsDuplicateEmail(false);
 
     if (!name.trim()) {
-      setError('Name is required');
+      setError(t.enterFullName);
       return;
     }
 
     if (!email.trim() && !phone.trim()) {
-      setError('Please provide either an email address or a phone number');
+      setError(t.enterValidEmail + ' / ' + t.enterValidPhone);
       return;
     }
 
     if (!password || password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError(t.passwordMinLength);
       return;
     }
 
@@ -53,7 +56,28 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
       setLanguage(preferredLanguage);
       onNavigate('dashboard');
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Please check the entered details.');
+      const errMsg = err.message || '';
+      const errCode = err.code || '';
+      setPassword(''); // Clear sensitive password input while keeping name, email, phone intact
+
+      if (
+        errCode === 'EMAIL_ALREADY_EXISTS' ||
+        errCode === 'PHONE_ALREADY_EXISTS' ||
+        errCode === 'CONFLICT' ||
+        errMsg.toLowerCase().includes('already exists') ||
+        errMsg.toLowerCase().includes('already registered')
+      ) {
+        setIsDuplicateEmail(true);
+        setError(t.accountAlreadyExistsError);
+      } else if (
+        errMsg.toLowerCase().includes('failed to fetch') ||
+        errMsg.toLowerCase().includes('network') ||
+        errMsg.toLowerCase().includes('connection')
+      ) {
+        setError(t.networkError);
+      } else {
+        setError(errMsg || t.authError);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -68,9 +92,35 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
         </div>
 
         {error && (
-          <Alert type="error" className="mb-4">
-            {error}
-          </Alert>
+          <div style={{ marginBottom: '20px' }}>
+            <Alert type="error">
+              <div>
+                <div style={{ marginBottom: isDuplicateEmail ? '12px' : 0 }}>{error}</div>
+                {isDuplicateEmail && (
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={() => onNavigate('login')}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <LogIn size={14} />
+                      <span>{t.signInInstead}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onNavigate('login')}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    >
+                      <KeyRound size={14} />
+                      <span>{t.forgotPassword}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </Alert>
+          </div>
         )}
 
         <form onSubmit={handleSubmit}>
@@ -96,7 +146,10 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
                 type="email"
                 className="input-control"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (isDuplicateEmail) setIsDuplicateEmail(false);
+                }}
                 placeholder="user@example.com"
                 disabled={isLoading}
               />
@@ -115,7 +168,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
             </div>
           </div>
           <div className="form-helper" style={{ marginTop: '-12px', marginBottom: '16px' }}>
-            * Provide either email or 10-digit mobile number
+            * {t.phoneNumber} / {t.emailAddress}
           </div>
 
           <div className="form-group">
@@ -127,7 +180,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
               className="input-control"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
+              placeholder={t.passwordMinLength}
               disabled={isLoading}
               required
             />
@@ -154,9 +207,32 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
             disabled={isLoading}
           >
             {isLoading ? <div className="spinner" /> : <UserPlus size={18} />}
-            <span>{isLoading ? 'Creating account...' : t.register}</span>
+            <span>{isLoading ? t.creatingAccount : t.register}</span>
           </button>
         </form>
+
+        {/* OR Divider */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            margin: '20px 0',
+            color: 'var(--text-muted)',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+          }}
+        >
+          <div style={{ flex: 1, height: '1px', background: 'var(--border-light)' }} />
+          <span style={{ padding: '0 12px' }}>{t.orDivider}</span>
+          <div style={{ flex: 1, height: '1px', background: 'var(--border-light)' }} />
+        </div>
+
+        {/* Google Sign Up Button */}
+        <GoogleAuthButton
+          mode="register"
+          onSuccess={() => onNavigate('dashboard')}
+          onError={(err) => setError(err)}
+        />
 
         <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '0.9rem' }}>
           <a

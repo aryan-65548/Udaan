@@ -31,6 +31,23 @@ export const putAssessmentInputSchema = z.object({
   valueBoolean: z.boolean().optional().nullable(),
   valueJson: z.any().optional().nullable(),
   source: z.enum(['USER', 'AI', 'SYSTEM']).default('USER'),
+}).superRefine((data, ctx) => {
+  if (data.inputType === 'NUMBER' && data.valueNumber !== undefined && data.valueNumber !== null) {
+    const num = Number(data.valueNumber);
+    if (isNaN(num) || !isFinite(num)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Value must be a valid, finite number for inputType NUMBER',
+        path: ['valueNumber'],
+      });
+    } else if (num < 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Numerical values cannot be negative',
+        path: ['valueNumber'],
+      });
+    }
+  }
 });
 
 const profileObjectInputSchema = z.object({
@@ -53,10 +70,10 @@ const profileObjectInputSchema = z.object({
         }
         break;
       case 'NUMBER':
-        if (typeof data.value !== 'number' || Number.isNaN(data.value)) {
+        if (typeof data.value !== 'number' || Number.isNaN(data.value) || !Number.isFinite(data.value) || data.value < 0) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: 'Value must be a number for inputType NUMBER',
+            message: 'Value must be a non-negative, finite number for inputType NUMBER',
             path: ['value'],
           });
         }

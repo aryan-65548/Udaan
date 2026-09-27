@@ -39,3 +39,18 @@ export async function getVillages(blockId: string): Promise<LocationItem[]> {
 export async function getLocationById(id: string): Promise<LocationWithHierarchy> {
   return apiClient<LocationWithHierarchy>(`/locations/${id}`);
 }
+
+export interface ManualLocationPayload {
+  stateName: string;
+  districtName: string;
+  blockName?: string;
+  villageName?: string;
+}
+
+export async function createManualLocation(payload: ManualLocationPayload): Promise<LocationItem> {
+  return apiClient<LocationItem>('/locations/manual', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+

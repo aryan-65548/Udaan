@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Alert } from '../components/Alert';
+import { GoogleAuthButton } from '../components/GoogleAuthButton';
 import { Mail, Phone, LogIn } from 'lucide-react';
 
 interface LoginPageProps {
@@ -23,12 +24,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
     setError(null);
 
     if (!identifier.trim()) {
-      setError(identifierType === 'email' ? 'Please enter your email' : 'Please enter your phone number');
+      setError(identifierType === 'email' ? t.enterValidEmail : t.enterValidPhone);
       return;
     }
 
     if (!password) {
-      setError('Please enter your password');
+      setError(t.enterPassword);
       return;
     }
 
@@ -74,7 +75,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
               }}
             >
               <Mail size={14} />
-              <span>Email</span>
+              <span>{t.emailAddress}</span>
             </button>
             <button
               type="button"
@@ -86,7 +87,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
               }}
             >
               <Phone size={14} />
-              <span>Phone</span>
+              <span>{t.phoneNumber}</span>
             </button>
           </div>
 
@@ -129,9 +130,32 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onNavigate }) => {
             disabled={isLoading}
           >
             {isLoading ? <div className="spinner" /> : <LogIn size={18} />}
-            <span>{isLoading ? 'Signing in...' : t.login}</span>
+            <span>{isLoading ? t.signingIn : t.login}</span>
           </button>
         </form>
+
+        {/* OR Divider */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            margin: '20px 0',
+            color: 'var(--text-muted)',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+          }}
+        >
+          <div style={{ flex: 1, height: '1px', background: 'var(--border-light)' }} />
+          <span style={{ padding: '0 12px' }}>{t.orDivider}</span>
+          <div style={{ flex: 1, height: '1px', background: 'var(--border-light)' }} />
+        </div>
+
+        {/* Google Sign In Button */}
+        <GoogleAuthButton
+          mode="login"
+          onSuccess={() => onNavigate('dashboard')}
+          onError={(err) => setError(err)}
+        />
 
         <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '0.9rem' }}>
           <a

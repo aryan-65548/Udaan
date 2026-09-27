@@ -18,10 +18,12 @@ describe('AI Gateway API', () => {
   let otherAssessmentId: string;
 
   beforeAll(async () => {
-    // 1. Create users
+    // 1. Create users with unique phones
+    const phone1 = `+9199${Math.floor(10000000 + Math.random() * 90000000)}`;
+    const phone2 = `+9199${Math.floor(10000000 + Math.random() * 90000000)}`;
     const userRes = await db.insert(users).values([
-      { name: 'AI Test User', phone: '+919999999902', passwordHash: 'hash', role: 'ENTREPRENEUR', preferredLanguage: 'en' },
-      { name: 'Other User', phone: '+919999999903', passwordHash: 'hash', role: 'ENTREPRENEUR', preferredLanguage: 'en' },
+      { name: 'AI Test User', phone: phone1, passwordHash: 'hash', role: 'ENTREPRENEUR', preferredLanguage: 'en' },
+      { name: 'Other User', phone: phone2, passwordHash: 'hash', role: 'ENTREPRENEUR', preferredLanguage: 'en' },
     ]).returning();
     userId = userRes[0].id;
     otherUserId = userRes[1].id;
@@ -31,7 +33,7 @@ describe('AI Gateway API', () => {
     otherUserToken = jwt.sign({ userId: otherUserId }, process.env.JWT_SECRET || 'test_secret');
 
     const state = await db.insert(locations).values({ name: 'MH', type: 'STATE' }).returning();
-    const cat = await db.insert(businessCategories).values({ name: 'Retail', code: 'RETAIL_1' }).returning();
+    const cat = await db.insert(businessCategories).values({ name: 'Retail', code: `RETAIL_${Date.now()}` }).returning();
 
     // 3. Create Assessment
     const ast = await db.insert(assessments).values([

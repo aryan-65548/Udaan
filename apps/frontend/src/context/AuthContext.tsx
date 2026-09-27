@@ -5,19 +5,39 @@ import {
   login as apiLogin,
   register as apiRegister,
   logout as apiLogout,
+  updateProfile as apiUpdateProfile,
+  deleteAccount as apiDeleteAccount,
+  loginWithGoogle as apiLoginWithGoogle,
   type LoginPayload,
   type RegisterPayload,
 } from '../api/auth';
 import { getStoredTokens, setStoredTokens } from '../api/client';
+
+export interface UpdateProfilePayload {
+  name?: string;
+  phone?: string;
+  preferredLanguage?: 'en' | 'hi' | 'gu';
+  businessName?: string;
+  businessCategory?: string;
+  operatingState?: string;
+  operatingDistrict?: string;
+  experienceLevel?: string;
+  businessBackground?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (payload: LoginPayload) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateUserProfile: (payload: UpdateProfilePayload) => Promise<User>;
+  deleteUserAccount: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -68,6 +88,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async (idToken: string) => {
+    setIsLoading(true);
+    try {
+      const res = await apiLoginWithGoogle(idToken);
+      setUser(res.user);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const register = async (payload: RegisterPayload) => {
     setIsLoading(true);
     try {
@@ -88,14 +118,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateUserProfile = async (payload: UpdateProfilePayload) => {
+    const updated = await apiUpdateProfile(payload);
+    setUser(updated);
+    return updated;
+  };
+
+  const deleteUserAccount = async () => {
+    setIsLoading(true);
+    try {
+      await apiDeleteAccount();
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated: Boolean(user),
     isLoading,
     login,
+    loginWithGoogle,
     register,
     logout,
     refreshUser: fetchCurrentUser,
+    updateUserProfile,
+    deleteUserAccount,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

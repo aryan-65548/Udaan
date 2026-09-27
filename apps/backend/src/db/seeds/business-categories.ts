@@ -73,6 +73,15 @@ export const initialBusinessCategories = [
     isActive: true,
     sortOrder: 8,
   },
+  {
+    id: 'b1000000-0000-0000-0000-000000000009',
+    code: 'OTHER',
+    name: 'Other',
+    description: 'Other business idea or custom micro-enterprise',
+    parentId: null,
+    isActive: true,
+    sortOrder: 9,
+  },
 ];
 
 export async function seedBusinessCategories(db: any) {

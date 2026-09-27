@@ -2,7 +2,13 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import type { SupportedLanguage } from '../i18n/translations';
-import { LogOut, PlusCircle, LayoutDashboard, User as UserIcon } from 'lucide-react';
+import {
+  LogOut,
+  LayoutDashboard,
+  FileSpreadsheet,
+  User as UserIcon,
+  HelpCircle,
+} from 'lucide-react';
 
 interface NavbarProps {
   onNavigate: (view: string) => void;
@@ -21,7 +27,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentView }) => {
     <header className="navbar">
       <div className="navbar-inner">
         <a
-          href="#home"
+          href={isAuthenticated ? '#dashboard' : '#landing'}
           className="brand-logo"
           onClick={(e) => {
             e.preventDefault();
@@ -63,37 +69,61 @@ export const Navbar: React.FC<NavbarProps> = ({ onNavigate, currentView }) => {
 
           {isAuthenticated ? (
             <>
+              {/* Dashboard Link */}
               <button
                 type="button"
                 className={`btn btn-sm ${currentView === 'dashboard' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => onNavigate('dashboard')}
               >
                 <LayoutDashboard size={16} />
-                <span>{t.dashboard}</span>
+                <span className="hide-mobile">{t.dashboard}</span>
               </button>
 
+              {/* Previous Assessments Link */}
               <button
                 type="button"
-                className={`btn btn-sm ${currentView === 'create' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => onNavigate('create')}
+                className={`btn btn-sm ${currentView === 'assessments' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => onNavigate('assessments')}
+                title={t.viewPreviousAssessments}
               >
-                <PlusCircle size={16} />
-                <span>{t.newAssessment}</span>
+                <FileSpreadsheet size={16} />
+                <span className="hide-mobile">{t.myAssessments}</span>
               </button>
 
-              <div className="user-menu-pill" title={user?.email || user?.phone || user?.name}>
+              {/* Help Link */}
+              <button
+                type="button"
+                className={`btn btn-sm ${currentView === 'help' ? 'btn-primary' : 'btn-secondary'}`}
+                onClick={() => onNavigate('help')}
+                title={t.help}
+              >
+                <HelpCircle size={16} />
+                <span className="hide-mobile">{t.help}</span>
+              </button>
+
+              {/* Profile Link */}
+              <div
+                className={`user-menu-pill ${currentView === 'profile' ? 'active' : ''}`}
+                style={{ cursor: 'pointer' }}
+                onClick={() => onNavigate('profile')}
+                title={user?.email || user?.phone || user?.name}
+              >
                 <div className="user-avatar-badge">
                   {user?.name ? user.name.charAt(0).toUpperCase() : <UserIcon size={12} />}
                 </div>
-                <span style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {user?.name || 'User'}
+                <span style={{ maxWidth: '110px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {user?.name || t.profile}
                 </span>
               </div>
 
+              {/* Logout Button */}
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                onClick={() => logout()}
+                onClick={() => {
+                  logout();
+                  onNavigate('login');
+                }}
                 title={t.logout}
               >
                 <LogOut size={16} />

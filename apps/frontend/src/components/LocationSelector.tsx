@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   type LocationItem,
   getStates,
@@ -8,7 +8,7 @@ import {
   getLocationById,
 } from '../api/locations';
 import { useLanguage } from '../context/LanguageContext';
-import { MapPin, CheckCircle2 } from 'lucide-react';
+import { MapPin, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 
 interface LocationSelectorProps {
   value: string;
@@ -23,88 +23,133 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
 }) => {
   const { t } = useLanguage();
 
+  // Dropdown options
   const [states, setStates] = useState<LocationItem[]>([]);
   const [districts, setDistricts] = useState<LocationItem[]>([]);
   const [blocks, setBlocks] = useState<LocationItem[]>([]);
   const [villages, setVillages] = useState<LocationItem[]>([]);
 
+  // Selected IDs
   const [selectedStateId, setSelectedStateId] = useState<string>('');
   const [selectedDistrictId, setSelectedDistrictId] = useState<string>('');
   const [selectedBlockId, setSelectedBlockId] = useState<string>('');
   const [selectedVillageId, setSelectedVillageId] = useState<string>('');
 
+  // Loading states
   const [isLoadingStates, setIsLoadingStates] = useState(false);
   const [isLoadingDistricts, setIsLoadingDistricts] = useState(false);
   const [isLoadingBlocks, setIsLoadingBlocks] = useState(false);
   const [isLoadingVillages, setIsLoadingVillages] = useState(false);
 
+  // Error states
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  // Village availability state
+  const [hasNoVillages, setHasNoVillages] = useState(false);
+
+  // Selected hierarchy display text
   const [selectedHierarchyText, setSelectedHierarchyText] = useState<string>('');
 
-  // Initial load: Fetch states
+  // Request sequence tracking to prevent stale/out-of-order race conditions
+  const districtReqSeq = useRef(0);
+  const blockReqSeq = useRef(0);
+  const villageReqSeq = useRef(0);
+
+  // Load States on mount
   useEffect(() => {
     let mounted = true;
     setIsLoadingStates(true);
+    setLocationError(null);
+
     getStates()
       .then((data) => {
-        if (mounted) {
-          setStates(data);
-          // If no value is pre-selected and there is only 1 state or states exist, let user pick
-        }
+        if (!mounted) return;
+        setStates(data || []);
       })
-      .catch((err) => console.error('Failed to load states', err))
+      .catch((err) => {
+        if (!mounted) return;
+        setLocationError(err.message || 'Failed to load states');
+      })
       .finally(() => {
         if (mounted) setIsLoadingStates(false);
       });
+
     return () => {
       mounted = false;
     };
   }, []);
 
-  // Pre-populate if existing value is supplied
+  // Pre-populate dropdowns if an existing location ID is supplied
   useEffect(() => {
     if (!value) return;
     let mounted = true;
+
     getLocationById(value)
       .then(async (locWithHierarchy) => {
         if (!mounted) return;
         const hierarchy = locWithHierarchy.hierarchy || [];
-        const stateItem = hierarchy.find((l) => l.type === 'STATE') || (locWithHierarchy.type === 'STATE' ? locWithHierarchy : null);
-        const districtItem = hierarchy.find((l) => l.type === 'DISTRICT') || (locWithHierarchy.type === 'DISTRICT' ? locWithHierarchy : null);
-        const blockItem = hierarchy.find((l) => l.type === 'BLOCK') || (locWithHierarchy.type === 'BLOCK' ? locWithHierarchy : null);
-        const villageItem = hierarchy.find((l) => l.type === 'VILLAGE') || (locWithHierarchy.type === 'VILLAGE' ? locWithHierarchy : null);
+        const stateItem =
+          hierarchy.find((l) => l.type === 'STATE') ||
+          (locWithHierarchy.type === 'STATE' ? locWithHierarchy : null);
+        const districtItem =
+          hierarchy.find((l) => l.type === 'DISTRICT') ||
+          (locWithHierarchy.type === 'DISTRICT' ? locWithHierarchy : null);
+        const blockItem =
+          hierarchy.find((l) => l.type === 'BLOCK') ||
+          (locWithHierarchy.type === 'BLOCK' ? locWithHierarchy : null);
+        const villageItem =
+          hierarchy.find((l) => l.type === 'VILLAGE') ||
+          (locWithHierarchy.type === 'VILLAGE' ? locWithHierarchy : null);
 
-        setSelectedHierarchyText(
-          [villageItem?.name, blockItem?.name, districtItem?.name, stateItem?.name]
-            .filter(Boolean)
-            .join(' → ')
-        );
+        const names = [villageItem?.name, blockItem?.name, districtItem?.name, stateItem?.name]
+          .filter(Boolean)
+          .join(' → ');
+        setSelectedHierarchyText(names || locWithHierarchy.name);
 
         if (stateItem) {
           setSelectedStateId(stateItem.id);
-          const dList = await getDistricts(stateItem.id);
-          if (mounted) setDistricts(dList);
+          try {
+            const dList = await getDistricts(stateItem.id);
+            if (mounted) setDistricts(dList || []);
+          } catch {
+            // Non-fatal
+          }
         }
         if (districtItem) {
           setSelectedDistrictId(districtItem.id);
-          const bList = await getBlocks(districtItem.id);
-          if (mounted) setBlocks(bList);
+          try {
+            const bList = await getBlocks(districtItem.id);
+            if (mounted) setBlocks(bList || []);
+          } catch {
+            // Non-fatal
+          }
         }
         if (blockItem) {
           setSelectedBlockId(blockItem.id);
-          const vList = await getVillages(blockItem.id);
-          if (mounted) setVillages(vList);
+          try {
+            const vList = await getVillages(blockItem.id);
+            if (mounted) {
+              setVillages(vList || []);
+              setHasNoVillages(!vList || vList.length === 0);
+            }
+          } catch {
+            // Non-fatal
+          }
         }
         if (villageItem) {
           setSelectedVillageId(villageItem.id);
         }
       })
-      .catch((err) => console.error('Failed to resolve initial location hierarchy', err));
+      .catch((err) => {
+        console.warn('Could not load hierarchy for location:', value, err);
+      });
 
     return () => {
       mounted = false;
     };
   }, [value]);
 
+  // Handle State selection
   const handleStateChange = async (stateId: string) => {
     setSelectedStateId(stateId);
     setSelectedDistrictId('');
@@ -113,88 +158,181 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     setDistricts([]);
     setBlocks([]);
     setVillages([]);
+    setHasNoVillages(false);
+    setLocationError(null);
 
     if (!stateId) {
       onChange('');
+      setSelectedHierarchyText('');
       return;
     }
 
     const stateObj = states.find((s) => s.id === stateId);
     onChange(stateId, stateObj);
+    setSelectedHierarchyText(stateObj?.name || '');
 
+    const currentSeq = ++districtReqSeq.current;
     setIsLoadingDistricts(true);
+
     try {
       const data = await getDistricts(stateId);
-      setDistricts(data);
-    } catch (err) {
-      console.error('Failed to load districts', err);
+      if (currentSeq !== districtReqSeq.current) return; // Discard stale response
+      setDistricts(data || []);
+    } catch (err: any) {
+      if (currentSeq !== districtReqSeq.current) return;
+      setLocationError(err.message || 'Failed to load districts');
     } finally {
-      setIsLoadingDistricts(false);
+      if (currentSeq === districtReqSeq.current) {
+        setIsLoadingDistricts(false);
+      }
     }
   };
 
+  // Handle District selection
   const handleDistrictChange = async (districtId: string) => {
     setSelectedDistrictId(districtId);
     setSelectedBlockId('');
     setSelectedVillageId('');
     setBlocks([]);
     setVillages([]);
+    setHasNoVillages(false);
+    setLocationError(null);
+
+    const stateObj = states.find((s) => s.id === selectedStateId);
 
     if (!districtId) {
-      onChange(selectedStateId);
+      onChange(selectedStateId, stateObj);
+      setSelectedHierarchyText(stateObj?.name || '');
       return;
     }
 
     const distObj = districts.find((d) => d.id === districtId);
     onChange(districtId, distObj);
+    setSelectedHierarchyText([distObj?.name, stateObj?.name].filter(Boolean).join(' → '));
 
+    const currentSeq = ++blockReqSeq.current;
     setIsLoadingBlocks(true);
+
     try {
       const data = await getBlocks(districtId);
-      setBlocks(data);
-    } catch (err) {
-      console.error('Failed to load blocks', err);
+      if (currentSeq !== blockReqSeq.current) return; // Discard stale response
+      setBlocks(data || []);
+    } catch (err: any) {
+      if (currentSeq !== blockReqSeq.current) return;
+      setLocationError(err.message || 'Failed to load blocks');
     } finally {
-      setIsLoadingBlocks(false);
+      if (currentSeq === blockReqSeq.current) {
+        setIsLoadingBlocks(false);
+      }
     }
   };
 
+  // Handle Block selection
   const handleBlockChange = async (blockId: string) => {
     setSelectedBlockId(blockId);
     setSelectedVillageId('');
     setVillages([]);
+    setHasNoVillages(false);
+    setLocationError(null);
+
+    const distObj = districts.find((d) => d.id === selectedDistrictId);
+    const stateObj = states.find((s) => s.id === selectedStateId);
 
     if (!blockId) {
-      onChange(selectedDistrictId);
+      onChange(selectedDistrictId, distObj);
+      setSelectedHierarchyText([distObj?.name, stateObj?.name].filter(Boolean).join(' → '));
       return;
     }
 
     const blockObj = blocks.find((b) => b.id === blockId);
     onChange(blockId, blockObj);
+    setSelectedHierarchyText([blockObj?.name, distObj?.name, stateObj?.name].filter(Boolean).join(' → '));
 
+    const currentSeq = ++villageReqSeq.current;
     setIsLoadingVillages(true);
+
     try {
       const data = await getVillages(blockId);
-      setVillages(data);
-    } catch (err) {
-      console.error('Failed to load villages', err);
+      if (currentSeq !== villageReqSeq.current) return; // Discard stale response
+      if (data && data.length > 0) {
+        setVillages(data);
+        setHasNoVillages(false);
+      } else {
+        setVillages([]);
+        setHasNoVillages(true);
+      }
+    } catch (err: any) {
+      if (currentSeq !== villageReqSeq.current) return;
+      setLocationError(err.message || 'Failed to load villages');
     } finally {
-      setIsLoadingVillages(false);
+      if (currentSeq === villageReqSeq.current) {
+        setIsLoadingVillages(false);
+      }
     }
   };
 
-  const handleVillageChange = (villageId: string) => {
+  // Handle Village selection
+  const handleVillageChange = async (villageId: string) => {
     setSelectedVillageId(villageId);
+    const blockObj = blocks.find((b) => b.id === selectedBlockId);
+    const distObj = districts.find((d) => d.id === selectedDistrictId);
+    const stateObj = states.find((s) => s.id === selectedStateId);
+
     if (!villageId) {
-      onChange(selectedBlockId);
+      onChange(selectedBlockId, blockObj);
+      setSelectedHierarchyText([blockObj?.name, distObj?.name, stateObj?.name].filter(Boolean).join(' → '));
       return;
     }
+
     const villageObj = villages.find((v) => v.id === villageId);
     onChange(villageId, villageObj);
+    setSelectedHierarchyText(
+      [villageObj?.name, blockObj?.name, distObj?.name, stateObj?.name].filter(Boolean).join(' → ')
+    );
   };
 
   return (
     <div className="location-selector-box">
+      {locationError && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: '#fef2f2',
+            color: '#dc2626',
+            padding: '10px 14px',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '0.85rem',
+            marginBottom: '14px',
+            border: '1px solid #fecaca',
+          }}
+        >
+          <AlertCircle size={16} />
+          <span>{locationError}</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => {
+              if (!selectedStateId) {
+                getStates().then(setStates);
+              } else if (!selectedDistrictId) {
+                handleStateChange(selectedStateId);
+              } else if (!selectedBlockId) {
+                handleDistrictChange(selectedDistrictId);
+              } else {
+                handleBlockChange(selectedBlockId);
+              }
+            }}
+            style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: '0.75rem' }}
+          >
+            <RefreshCw size={12} />
+            <span>{t.refresh}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Cascading Dropdowns */}
       <div className="grid-2">
         {/* State */}
         <div className="form-group">
@@ -207,7 +345,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             onChange={(e) => handleStateChange(e.target.value)}
             disabled={disabled || isLoadingStates}
           >
-            <option value="">{isLoadingStates ? 'Loading states...' : t.selectState}</option>
+            <option value="">{isLoadingStates ? t.loading : t.selectState}</option>
             {states.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -228,7 +366,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             disabled={disabled || !selectedStateId || isLoadingDistricts}
           >
             <option value="">
-              {isLoadingDistricts ? 'Loading districts...' : t.selectDistrict}
+              {isLoadingDistricts ? `${t.loading}...` : t.selectDistrict}
             </option>
             {districts.map((d) => (
               <option key={d.id} value={d.id}>
@@ -238,7 +376,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           </select>
         </div>
 
-        {/* Block */}
+        {/* Block / Taluka */}
         <div className="form-group">
           <label className="form-label">{t.block}</label>
           <select
@@ -248,7 +386,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
             disabled={disabled || !selectedDistrictId || isLoadingBlocks}
           >
             <option value="">
-              {isLoadingBlocks ? 'Loading blocks...' : t.selectBlock}
+              {isLoadingBlocks ? `${t.loading}...` : t.selectBlock}
             </option>
             {blocks.map((b) => (
               <option key={b.id} value={b.id}>
@@ -258,17 +396,21 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           </select>
         </div>
 
-        {/* Village */}
+        {/* Village / Town */}
         <div className="form-group">
           <label className="form-label">{t.village}</label>
           <select
             className="select-control"
             value={selectedVillageId}
             onChange={(e) => handleVillageChange(e.target.value)}
-            disabled={disabled || !selectedBlockId || isLoadingVillages}
+            disabled={disabled || !selectedBlockId || isLoadingVillages || hasNoVillages}
           >
             <option value="">
-              {isLoadingVillages ? 'Loading villages...' : t.selectVillage}
+              {isLoadingVillages
+                ? `${t.loading}...`
+                : hasNoVillages
+                ? t.noVillagesAvailable
+                : t.selectVillage}
             </option>
             {villages.map((v) => (
               <option key={v.id} value={v.id}>
@@ -276,30 +418,49 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
               </option>
             ))}
           </select>
+
+          {hasNoVillages && selectedBlockId && !isLoadingVillages && (
+            <div
+              style={{
+                fontSize: '0.78rem',
+                color: 'var(--text-muted)',
+                marginTop: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <span>{t.savedAtBlockLevel}</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {value && selectedHierarchyText && (
+      {/* Selected Location Summary Indicator */}
+      {selectedHierarchyText && (
         <div
           style={{
-            marginTop: '8px',
-            padding: '8px 12px',
-            background: 'var(--bg-subtle)',
+            marginTop: '12px',
+            padding: '10px 14px',
+            background: 'var(--brand-green-light)',
+            border: '1px solid var(--brand-green-border)',
             borderRadius: 'var(--radius-sm)',
             fontSize: '0.85rem',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            color: 'var(--text-secondary)',
+            color: 'var(--text-main)',
           }}
         >
-          <MapPin size={16} color="var(--brand-green)" />
+          <MapPin size={16} color="var(--brand-green)" style={{ flexShrink: 0 }} />
           <span>
-            <strong>Selected:</strong> {selectedHierarchyText}
+            <strong>{t.selectedLocationText}</strong> {selectedHierarchyText}
           </span>
-          <CheckCircle2 size={16} color="var(--brand-green)" style={{ marginLeft: 'auto' }} />
+          <CheckCircle2 size={16} color="var(--brand-green)" style={{ marginLeft: 'auto', flexShrink: 0 }} />
         </div>
       )}
     </div>
   );
 };
+
+

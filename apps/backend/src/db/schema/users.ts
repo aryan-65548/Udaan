@@ -21,6 +21,13 @@ export const users = pgTable(
     email: varchar('email', { length: 255 }),
     phone: varchar('phone', { length: 15 }),
     passwordHash: text('password_hash').notNull(),
+    googleId: varchar('google_id', { length: 255 }),
+    businessName: varchar('business_name', { length: 200 }),
+    businessCategory: varchar('business_category', { length: 100 }),
+    operatingState: varchar('operating_state', { length: 100 }),
+    operatingDistrict: varchar('operating_district', { length: 100 }),
+    experienceLevel: varchar('experience_level', { length: 50 }),
+    businessBackground: text('business_background'),
     role: userRoleEnum('role').notNull(),
     preferredLanguage: varchar('preferred_language', { length: 10 }).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
@@ -30,6 +37,7 @@ export const users = pgTable(
   (table) => ({
     emailUniqueIdx: uniqueIndex('email_unique_idx').on(table.email),
     phoneUniqueIdx: uniqueIndex('phone_unique_idx').on(table.phone),
+    googleIdIdx: index('users_google_id_idx').on(table.googleId),
   })
 );
 

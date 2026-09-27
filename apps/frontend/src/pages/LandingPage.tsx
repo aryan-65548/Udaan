@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
-import { ShieldCheck, MapPin, Calculator, TrendingUp, ArrowRight } from 'lucide-react';
+import { ShieldCheck, MapPin, Calculator, TrendingUp, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 interface LandingPageProps {
   onNavigate: (view: string) => void;
@@ -104,10 +104,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
       {/* 3 Pillars of Evidence Before Borrowing */}
       <div style={{ marginBottom: '40px' }}>
         <h2 style={{ textAlign: 'center', fontSize: '1.75rem', marginBottom: '8px' }}>
-          How UDAAN Protects Your Capital
+          {t.howItWorksTitle}
         </h2>
         <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '32px' }}>
-          Four structured steps to evaluate, verify, and plan your business before taking a bank loan.
+          {t.aboutUdaanDesc}
         </p>
 
         <div className="grid-3">
@@ -127,9 +127,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
             >
               <MapPin size={24} />
             </div>
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>Hyper-Local Feasibility</h3>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>{t.step1Title}</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-              Maps your specific state, district, block, and village demographics to determine real market potential and local viability.
+              {t.step1Desc}
             </p>
           </div>
 
@@ -147,11 +147,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
                 marginBottom: '16px',
               }}
             >
-              <ShieldCheck size={24} />
+              <CheckCircle2 size={24} />
             </div>
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>Ground Verification</h3>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>{t.step2Title}</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-              A 6-step on-ground reality check for customer demand, supplier terms, nearby competitors, and realistic operating costs.
+              {t.step2Desc}
             </p>
           </div>
 
@@ -171,9 +171,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
             >
               <Calculator size={24} />
             </div>
-            <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>Financial Structuring</h3>
+            <h3 style={{ fontSize: '1.2rem', marginBottom: '8px' }}>{t.step3Title}</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-              Deterministic EMI, project cost, debt-service coverage ratio (DSCR), and government subsidy scheme alignment.
+              {t.step3Desc}
             </p>
           </div>
         </div>
@@ -196,11 +196,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onNavigate }) => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--brand-green)', fontWeight: 700, marginBottom: '6px' }}>
             <TrendingUp size={20} />
-            <span>Built For Micro-Enterprises Across India</span>
+            <span>{t.tagline}</span>
           </div>
-          <h3 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>Ready to check your business feasibility?</h3>
-          <p style={{ color: 'var(--text-secondary)', maxWidth: '600px' }}>
-            Available in English, हिन्दी, and ગુજરાતી. Save your progress at any time and resume whenever convenient.
+          <h3 style={{ fontSize: '1.4rem', marginBottom: '8px' }}>{t.startFirstAssessment}</h3>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: '600px', margin: 0 }}>
+            {t.heroSubheadline}
           </p>
         </div>
 

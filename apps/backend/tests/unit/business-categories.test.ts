@@ -107,7 +107,7 @@ describe('Business Categories Unit & Seed Tests', () => {
   });
 
   describe('Seed Business Categories Contents & Idempotency', () => {
-    it('contains all 8 authoritative business category codes', () => {
+    it('contains all 8 authoritative business category codes plus other', () => {
       const codes = initialBusinessCategories.map((c) => c.code);
       expect(codes).toEqual([
         'DAIRY_FARMING',
@@ -118,6 +118,7 @@ describe('Business Categories Unit & Seed Tests', () => {
         'TRANSPORT',
         'SMALL_MANUFACTURING',
         'AGRICULTURE_SERVICE',
+        'OTHER',
       ]);
     });
 

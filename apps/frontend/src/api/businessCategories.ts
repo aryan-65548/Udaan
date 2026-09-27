@@ -2,6 +2,7 @@ import { apiClient } from './client';
 
 export interface BusinessCategoryItem {
   id: string;
+  code?: string;
   name: string;
   description: string | null;
   sortOrder: number;
