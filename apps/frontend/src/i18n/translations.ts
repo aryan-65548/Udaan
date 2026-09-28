@@ -258,6 +258,23 @@ export interface Translations {
   ownContributionRequired: string;
   negativeContributionError: string;
   invalidAmountError: string;
+  projectCostTitle: string;
+  projectCostSubtitle: string;
+  projectCostPlaceholder: string;
+  projectCostRequired: string;
+  negativeProjectCostError: string;
+  applicableScheme: string;
+  requiredContributionLabel: string;
+  statedContributionLabel: string;
+  contributionShortfallLabel: string;
+  noShortfallNotice: string;
+  shortfallWarningNotice: string;
+  quarterlyInstallmentLabel: string;
+  tenureAndMoratoriumLabel: string;
+  totalInterestLabel: string;
+  totalRepaymentLabel: string;
+  notEligibleProjectCostError: string;
+  recalculatingFinance: string;
   preliminaryFinanceTitle: string;
   minAssumedContributionPercent: string;
   maxTheoreticalProjectCost: string;
@@ -553,6 +570,23 @@ export const translations: Record<SupportedLanguage, Translations> = {
     ownContributionRequired: 'Please enter your own contribution amount (enter 0 if none).',
     negativeContributionError: 'Own contribution amount cannot be negative.',
     invalidAmountError: 'Please enter a valid, non-negative monetary amount.',
+    projectCostTitle: 'Total Proposed Business Project Cost (₹)',
+    projectCostSubtitle: 'Estimated total setup expenditure including machinery, tools, inventory, premises, and working capital.',
+    projectCostPlaceholder: 'e.g. 140000',
+    projectCostRequired: 'Please enter the total proposed project cost.',
+    negativeProjectCostError: 'Total project cost cannot be negative.',
+    applicableScheme: 'Applicable Financing Scheme',
+    requiredContributionLabel: 'Required Own Contribution (Margin)',
+    statedContributionLabel: 'Your Stated Contribution',
+    contributionShortfallLabel: 'Contribution Shortfall',
+    noShortfallNotice: 'Full margin requirement is met with your available contribution.',
+    shortfallWarningNotice: 'Additional margin required to meet scheme loan requirements.',
+    quarterlyInstallmentLabel: 'Estimated Quarterly Installment',
+    tenureAndMoratoriumLabel: 'Tenure & Moratorium',
+    totalInterestLabel: 'Total Estimated Interest',
+    totalRepaymentLabel: 'Total Estimated Repayment',
+    notEligibleProjectCostError: 'Project cost exceeds the ₹50,00,000 ceiling for government loan schemes.',
+    recalculatingFinance: 'Calculating authoritative scheme and financial schedule...',
     preliminaryFinanceTitle: 'Preliminary Financial Estimates (10% Minimum Own-Contribution Assumption)',
     minAssumedContributionPercent: 'Minimum Assumed Own Contribution',
     maxTheoreticalProjectCost: 'Maximum Theoretical Project Cost',
@@ -847,6 +881,23 @@ export const translations: Record<SupportedLanguage, Translations> = {
     ownContributionRequired: 'कृपया अपने स्वयं के योगदान की राशि दर्ज करें (यदि कुछ नहीं है तो 0 लिखें)।',
     negativeContributionError: 'स्व-योगदान राशि ऋणात्मक (नकारात्मक) नहीं हो सकती।',
     invalidAmountError: 'कृपया एक मान्य, गैर-ऋणात्मक धनराशि दर्ज करें।',
+    projectCostTitle: 'कुल प्रस्तावित व्यावसायिक परियोजना लागत (₹)',
+    projectCostSubtitle: 'मशीनरी, उपकरण, स्टॉक, परिसर और कार्यशील पूंजी सहित अनुमानित कुल स्थापना व्यय।',
+    projectCostPlaceholder: 'उदा. 140000',
+    projectCostRequired: 'कृपया कुल प्रस्तावित परियोजना लागत दर्ज करें।',
+    negativeProjectCostError: 'कुल परियोजना लागत ऋणात्मक नहीं हो सकती।',
+    applicableScheme: 'लागू वित्तपोषण योजना',
+    requiredContributionLabel: 'आवश्यक स्व-योगदान (मार्जिन)',
+    statedContributionLabel: 'आपका घोषित योगदान',
+    contributionShortfallLabel: 'योगदान में कमी (शॉर्टफॉल)',
+    noShortfallNotice: 'आपके उपलब्ध योगदान से पूरी मार्जिन आवश्यकता पूरी होती है।',
+    shortfallWarningNotice: 'योजना ऋण आवश्यकताओं को पूरा करने के लिए अतिरिक्त मार्जिन की आवश्यकता है।',
+    quarterlyInstallmentLabel: 'अनुमानित त्रैमासिक किस्त',
+    tenureAndMoratoriumLabel: 'अवधि और ऋण स्थगन (मोराटोरियम)',
+    totalInterestLabel: 'कुल अनुमानित ब्याज',
+    totalRepaymentLabel: 'कुल अनुमानित पुनर्भुगतान',
+    notEligibleProjectCostError: 'परियोजना लागत सरकारी ऋण योजनाओं की ₹50,00,000 की अधिकतम सीमा से अधिक है।',
+    recalculatingFinance: 'योजना और वित्तीय अनुसूची की गणना हो रही है...',
     preliminaryFinanceTitle: 'प्रारंभिक वित्तीय अनुमान (10% न्यूनतम स्व-योगदान धारणा)',
     minAssumedContributionPercent: 'न्यूनतम अनुमानित स्व-योगदान',
     maxTheoreticalProjectCost: 'अधिकतम सैद्धांतिक परियोजना लागत',
@@ -1141,6 +1192,23 @@ export const translations: Record<SupportedLanguage, Translations> = {
     ownContributionRequired: 'કૃપા કરીને તમારા પોતાના યોગદાનની રકમ દાખલ કરો (જો કંઈ ન હોય તો 0 લખો).',
     negativeContributionError: 'પોતાનું યોગદાન ઋણ (નેગેટિવ) હોઈ શકતું નથી.',
     invalidAmountError: 'કૃપા કરીને માન્ય અને બિન-ઋણાત્મક નાણાકીય રકમ દાખલ કરો.',
+    projectCostTitle: 'કુલ સૂચિત બિઝનેસ પ્રોજેક્ટ ખર્ચ (₹)',
+    projectCostSubtitle: 'મશીનરી, ઓજારો, કાચો માલ, પરિસર અને કાર્યકારી મૂડી સહિતનો અંદાજિત કુલ ખર્ચ.',
+    projectCostPlaceholder: 'દા.ત. 140000',
+    projectCostRequired: 'કૃપા કરીને કુલ સૂચિત પ્રોજેક્ટ ખર્ચ દાખલ કરો.',
+    negativeProjectCostError: 'કુલ પ્રોજેક્ટ ખર્ચ ઋણ હોઈ શકતો નથી.',
+    applicableScheme: 'લાગુ ધિરાણ યોજના',
+    requiredContributionLabel: 'જરૂરી સ્વ-યોગદાન (માર્જિન)',
+    statedContributionLabel: 'તમારું જાહેર કરેલ યોગદાન',
+    contributionShortfallLabel: 'યોગદાનની ઘટ (શોર્ટફોલ)',
+    noShortfallNotice: 'તમારા ઉપલબ્ધ યોગદાન સાથે માર્જિન આવશ્યકતા સંપૂર્ણ પૂર્ણ થાય છે.',
+    shortfallWarningNotice: 'યોજના લોન શરતો પૂરી કરવા વધારાના માર્જિનની જરૂર છે.',
+    quarterlyInstallmentLabel: 'અંદાજિત ત્રિમાસિક હપ્તો',
+    tenureAndMoratoriumLabel: 'મુદ્દત અને મોરેટોરિયમ',
+    totalInterestLabel: 'કુલ અંદાજિત વ્યાજ',
+    totalRepaymentLabel: 'કુલ અંદાજિત ચૂકવણી',
+    notEligibleProjectCostError: 'પ્રોજેક્ટ ખર્ચ સરકારી લોન યોજનાઓની ₹50,00,000 મહત્તમ મર્યાદાથી વધુ છે.',
+    recalculatingFinance: 'યોજના અને નાણાકીય શેડ્યૂલની ગણતરી ચાલુ છે...',
     preliminaryFinanceTitle: 'પ્રારંભિક નાણાકીય અંદાજ (10% લઘુત્તમ સ્વ-યોગદાન ધારણા)',
     minAssumedContributionPercent: 'લઘુત્તમ ધારવામાં આવેલ સ્વ-યોગદાન',
     maxTheoreticalProjectCost: 'મહત્તમ સૈદ્ધાંતિક પ્રોજેક્ટ ખર્ચ',

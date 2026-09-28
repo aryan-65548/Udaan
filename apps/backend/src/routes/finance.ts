@@ -94,7 +94,26 @@ router.post('/calculate', async (req: AuthenticatedRequest, res, next) => {
     // 1. Fetch raw inputs from assessment_inputs table
     const rawInputs = await getFinanceInputsForAssessment(assessmentId);
 
-    // 2. Validate using Zod schema to ensure required fields like availableMarginCapital are present
+    // 2. Merge request body overrides if provided
+    if (req.body && typeof req.body === 'object') {
+      if (req.body.project_cost !== undefined) rawInputs.projectCost = req.body.project_cost;
+      if (req.body.projectCost !== undefined) rawInputs.projectCost = req.body.projectCost;
+      if (req.body.own_contribution !== undefined) {
+        rawInputs.ownContribution = req.body.own_contribution;
+        rawInputs.availableMarginCapital = req.body.own_contribution;
+      }
+      if (req.body.available_margin_capital !== undefined) {
+        rawInputs.availableMarginCapital = req.body.available_margin_capital;
+        rawInputs.ownContribution = req.body.available_margin_capital;
+      }
+      if (req.body.available_cash_funds !== undefined) rawInputs.availableCashFunds = req.body.available_cash_funds;
+      if (req.body.expected_monthly_revenue !== undefined) rawInputs.expectedMonthlyRevenue = req.body.expected_monthly_revenue;
+      if (req.body.expected_monthly_operating_cost !== undefined) rawInputs.expectedMonthlyOperatingCost = req.body.expected_monthly_operating_cost;
+      if (req.body.requested_moratorium_interest_treatment !== undefined) rawInputs.requestedMoratoriumInterestTreatment = req.body.requested_moratorium_interest_treatment;
+      if (req.body.requested_payment_frequency !== undefined) rawInputs.requestedPaymentFrequency = req.body.requested_payment_frequency;
+    }
+
+    // 3. Validate using Zod schema
     const parseResult = FinancialInputsSchema.safeParse(rawInputs);
     
     if (!parseResult.success) {
@@ -109,7 +128,7 @@ router.post('/calculate', async (req: AuthenticatedRequest, res, next) => {
 
     const validInputs = parseResult.data;
 
-    // 3. Orchestrate calculation and persistence
+    // 4. Orchestrate calculation and persistence
     const result = await runAndPersistFinanceCalculation(assessmentId, validInputs);
 
     return res.status(201).json({ data: result });
@@ -121,6 +140,9 @@ router.post('/calculate', async (req: AuthenticatedRequest, res, next) => {
 // Validation schema for incoming finance inputs
 const UpdateFinanceInputsSchema = z.object({
   available_margin_capital: z.number().nonnegative().optional(),
+  own_contribution: z.number().nonnegative().optional(),
+  project_cost: z.number().nonnegative().optional(),
+  available_cash_funds: z.number().nonnegative().optional(),
   expected_monthly_revenue: z.number().nonnegative().optional(),
   expected_monthly_operating_cost: z.number().nonnegative().optional(),
   requested_tenure_months: z.number().int().positive().optional(),

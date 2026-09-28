@@ -1,3 +1,4 @@
+import './config/env';
 import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth';
@@ -10,6 +11,7 @@ import schemeRoutes from './routes/schemes';
 import validationRoutes from './routes/validation';
 import locationIntelligenceRoutes from './routes/location-intelligence';
 import aiRoutes from './routes/ai';
+import questionnaireRoutes from './routes/questionnaire';
 import { errorHandler } from './middleware/error';
 
 const app = express();
@@ -25,6 +27,7 @@ app.use('/api/assessments', validationRoutes);
 app.use('/api/assessments', assessmentRoutes);
 app.use('/api/assessments/:id/finance', financeRoutes);
 app.use('/api/assessments/:id/location-intelligence', locationIntelligenceRoutes);
+app.use('/api/assessments/:id/questionnaire', questionnaireRoutes);
 app.use('/api/assessments/:id/ai', aiRoutes);
 app.use('/api/schemes', schemeRoutes);
 

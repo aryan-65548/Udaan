@@ -45,12 +45,44 @@ export function setStoredTokens(tokens: StoredTokens | null) {
   }
 }
 
-let isRefreshing = false;
-let refreshSubscribers: Array<(token: string | null) => void> = [];
+let activeRefreshPromise: Promise<string | null> | null = null;
 
-function onRefreshed(token: string | null) {
-  refreshSubscribers.forEach((callback) => callback(token));
-  refreshSubscribers = [];
+async function doRefreshToken(refreshToken: string): Promise<string | null> {
+  if (activeRefreshPromise) {
+    return activeRefreshPromise;
+  }
+
+  activeRefreshPromise = (async () => {
+    try {
+      const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (refreshRes.ok) {
+        const refreshData = await refreshRes.json();
+        const newTokens: StoredTokens = {
+          accessToken: refreshData.data.accessToken,
+          refreshToken: refreshData.data.refreshToken,
+        };
+        setStoredTokens(newTokens);
+        return newTokens.accessToken;
+      } else {
+        setStoredTokens(null);
+        window.dispatchEvent(new CustomEvent('udaan:auth_expired'));
+        return null;
+      }
+    } catch {
+      setStoredTokens(null);
+      window.dispatchEvent(new CustomEvent('udaan:auth_expired'));
+      return null;
+    } finally {
+      activeRefreshPromise = null;
+    }
+  })();
+
+  return activeRefreshPromise;
 }
 
 export async function apiClient<T>(
@@ -77,45 +109,16 @@ export async function apiClient<T>(
   });
 
   // Handle 401 Unauthorized with token refresh if possible
-  if (response.status === 401 && tokens?.refreshToken && !endpoint.includes('/auth/login') && !endpoint.includes('/auth/refresh')) {
-    if (!isRefreshing) {
-      isRefreshing = true;
-      try {
-        const refreshRes = await fetch(`${API_BASE}/auth/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refreshToken: tokens.refreshToken }),
-        });
-
-        if (refreshRes.ok) {
-          const refreshData = await refreshRes.json();
-          const newTokens: StoredTokens = {
-            accessToken: refreshData.data.accessToken,
-            refreshToken: refreshData.data.refreshToken,
-          };
-          setStoredTokens(newTokens);
-          onRefreshed(newTokens.accessToken);
-        } else {
-          setStoredTokens(null);
-          onRefreshed(null);
-          window.dispatchEvent(new CustomEvent('udaan:auth_expired'));
-        }
-      } catch {
-        setStoredTokens(null);
-        onRefreshed(null);
-        window.dispatchEvent(new CustomEvent('udaan:auth_expired'));
-      } finally {
-        isRefreshing = false;
-      }
-    }
-
-    // Wait for the ongoing refresh
-    const retryToken = await new Promise<string | null>((resolve) => {
-      refreshSubscribers.push(resolve);
-    });
-
-    if (retryToken) {
-      headers.set('Authorization', `Bearer ${retryToken}`);
+  if (
+    response.status === 401 &&
+    tokens?.refreshToken &&
+    !endpoint.includes('/auth/login') &&
+    !endpoint.includes('/auth/register') &&
+    !endpoint.includes('/auth/refresh')
+  ) {
+    const newAccessToken = await doRefreshToken(tokens.refreshToken);
+    if (newAccessToken) {
+      headers.set('Authorization', `Bearer ${newAccessToken}`);
       response = await fetch(url, {
         ...options,
         headers,

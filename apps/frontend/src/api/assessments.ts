@@ -38,6 +38,16 @@ export interface AssessmentItem {
   status: AssessmentStatus;
   aiStatus: AiStatus;
   aiSessionId: string | null;
+  locationSelectionMethod?: 'ADMINISTRATIVE' | 'GOOGLE_MAPS';
+  countryCode?: string;
+  stateName?: string | null;
+  districtName?: string | null;
+  blockName?: string | null;
+  villageName?: string | null;
+  formattedAddress?: string | null;
+  latitude?: string | number | null;
+  longitude?: string | number | null;
+  googlePlaceId?: string | null;
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -89,12 +99,32 @@ export interface CreateAssessmentPayload {
   locationId: string;
   businessCategoryId: string;
   language?: 'en' | 'hi' | 'gu';
+  locationSelectionMethod?: 'ADMINISTRATIVE' | 'GOOGLE_MAPS';
+  countryCode?: string;
+  stateName?: string | null;
+  districtName?: string | null;
+  blockName?: string | null;
+  villageName?: string | null;
+  formattedAddress?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  googlePlaceId?: string | null;
 }
 
 export interface UpdateAssessmentPayload {
   locationId?: string;
   businessCategoryId?: string;
   language?: 'en' | 'hi' | 'gu';
+  locationSelectionMethod?: 'ADMINISTRATIVE' | 'GOOGLE_MAPS';
+  countryCode?: string;
+  stateName?: string | null;
+  districtName?: string | null;
+  blockName?: string | null;
+  villageName?: string | null;
+  formattedAddress?: string | null;
+  latitude?: number | string | null;
+  longitude?: number | string | null;
+  googlePlaceId?: string | null;
 }
 
 export interface PutInputPayload {

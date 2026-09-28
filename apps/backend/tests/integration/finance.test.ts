@@ -223,6 +223,28 @@ describe('Finance Integration Tests', () => {
     expect(res.body.data.length).toBe(2); // Micro and Term
   });
 
+  it('POST /api/assessments/:id/finance/calculate - supports explicit project_cost and calculates Micro Finance loan cap shortfall', async () => {
+    const res = await request(app)
+      .post(`/api/assessments/${assessmentId}/finance/calculate`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({
+        project_cost: 140000,
+        own_contribution: 14000,
+        available_cash_funds: 25000,
+        requested_moratorium_interest_treatment: 'PAY_CURRENT'
+      });
+
+    expect(res.status).toBe(201);
+    const data = res.body.data;
+    expect(data.status).toBe('SUCCESS');
+    expect(data.schemeCode).toBe('MICRO_FINANCE');
+    expect(data.financeResult.loanStructure.projectCost).toBe('140000');
+    expect(data.financeResult.loanStructure.baseLoanAmount).toBe('126000');
+    expect(data.financeResult.loanStructure.loanAmount).toBe('125000'); // Capped
+    expect(data.financeResult.loanStructure.requiredOwnContribution).toBe('15000');
+    expect(data.financeResult.loanStructure.shortfall).toBe('1000');
+  });
+
   it('GET /api/schemes - lists active schemes', async () => {
     const res = await request(app)
       .get('/api/schemes')
@@ -232,3 +254,4 @@ describe('Finance Integration Tests', () => {
     expect(res.body.data.length).toBe(2);
   });
 });
+

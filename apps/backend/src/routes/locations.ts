@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db';
 import { locations } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, ilike, asc, sql } from 'drizzle-orm';
 import {
   locationIdParamSchema,
   stateIdParamSchema,
@@ -11,62 +11,151 @@ import {
 
 const router = Router();
 
-// GET /locations/states
-router.get('/states', async (_req, res, next) => {
+// GET /locations/states - List all states with optional search
+router.get('/states', async (req, res, next) => {
   try {
-    const states = await db
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+    const query = db
       .select()
       .from(locations)
-      .where(eq(locations.type, 'STATE'));
+      .where(
+        search
+          ? and(eq(locations.type, 'STATE'), ilike(locations.name, `%${search}%`))
+          : eq(locations.type, 'STATE')
+      )
+      .orderBy(asc(locations.name));
+
+    const states = await query;
     return res.json({ data: states });
   } catch (error) {
     next(error);
   }
 });
 
-// GET /locations/:stateId/districts
+// GET /locations/:stateId/districts - List districts under state
 router.get('/:stateId/districts', async (req, res, next) => {
   try {
     const { stateId } = stateIdParamSchema.parse(req.params);
-    const districts = await db
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+    const query = db
       .select()
       .from(locations)
-      .where(and(eq(locations.parentId, stateId), eq(locations.type, 'DISTRICT')));
+      .where(
+        search
+          ? and(
+              eq(locations.parentId, stateId),
+              eq(locations.type, 'DISTRICT'),
+              ilike(locations.name, `%${search}%`)
+            )
+          : and(eq(locations.parentId, stateId), eq(locations.type, 'DISTRICT'))
+      )
+      .orderBy(asc(locations.name));
+
+    const districts = await query;
     return res.json({ data: districts });
   } catch (error) {
     next(error);
   }
 });
 
-// GET /locations/:districtId/blocks
+// GET /locations/:districtId/blocks - List blocks under district
 router.get('/:districtId/blocks', async (req, res, next) => {
   try {
     const { districtId } = districtIdParamSchema.parse(req.params);
-    const blocks = await db
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+    const query = db
       .select()
       .from(locations)
-      .where(and(eq(locations.parentId, districtId), eq(locations.type, 'BLOCK')));
+      .where(
+        search
+          ? and(
+              eq(locations.parentId, districtId),
+              eq(locations.type, 'BLOCK'),
+              ilike(locations.name, `%${search}%`)
+            )
+          : and(eq(locations.parentId, districtId), eq(locations.type, 'BLOCK'))
+      )
+      .orderBy(asc(locations.name));
+
+    const blocks = await query;
     return res.json({ data: blocks });
   } catch (error) {
     next(error);
   }
 });
 
-// GET /locations/:blockId/villages
+// GET /locations/:blockId/villages - List villages under block (supports search and pagination)
 router.get('/:blockId/villages', async (req, res, next) => {
   try {
     const { blockId } = blockIdParamSchema.parse(req.params);
-    const villages = await db
-      .select()
-      .from(locations)
-      .where(and(eq(locations.parentId, blockId), eq(locations.type, 'VILLAGE')));
-    return res.json({ data: villages });
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
+    const offset = (page - 1) * limit;
+
+    const whereClause = search
+      ? and(
+          eq(locations.parentId, blockId),
+          eq(locations.type, 'VILLAGE'),
+          ilike(locations.name, `%${search}%`)
+        )
+      : and(eq(locations.parentId, blockId), eq(locations.type, 'VILLAGE'));
+
+    const [villages, totalResult] = await Promise.all([
+      db
+        .select()
+        .from(locations)
+        .where(whereClause)
+        .orderBy(asc(locations.name))
+        .limit(limit)
+        .offset(offset),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(locations)
+        .where(whereClause),
+    ]);
+
+    const total = totalResult[0]?.count || 0;
+
+    return res.json({
+      data: villages,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
     next(error);
   }
 });
 
-// GET /locations/:id
+// GET /locations/search - Global search across administrative hierarchy
+router.get('/search', async (req, res, next) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (!q || q.length < 2) {
+      return res.json({ data: [] });
+    }
+
+    const matches = await db
+      .select()
+      .from(locations)
+      .where(ilike(locations.name, `%${q}%`))
+      .orderBy(asc(locations.name))
+      .limit(30);
+
+    return res.json({ data: matches });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /locations/:id - Get location details and full parent hierarchy
 router.get('/:id', async (req, res, next) => {
   try {
     const { id } = locationIdParamSchema.parse(req.params);
@@ -118,7 +207,16 @@ router.get('/:id', async (req, res, next) => {
 // POST /locations/manual - Create or find manual location hierarchy
 router.post('/manual', async (req, res, next) => {
   try {
-    const { stateName, districtName, blockName, villageName } = req.body;
+    const {
+      stateName,
+      districtName,
+      blockName,
+      villageName,
+      latitude,
+      longitude,
+      stateCode,
+    } = req.body;
+
     if (!stateName || !districtName) {
       return res.status(400).json({
         error: {
@@ -138,6 +236,7 @@ router.post('/manual', async (req, res, next) => {
           name: stateName.trim(),
           type: 'STATE',
           parentId: null,
+          stateCode: stateCode || null,
         })
         .returning();
       state = newState;
@@ -156,6 +255,7 @@ router.post('/manual', async (req, res, next) => {
           name: districtName.trim(),
           type: 'DISTRICT',
           parentId: state.id,
+          stateCode: state.stateCode,
         })
         .returning();
       district = newDistrict;
@@ -176,6 +276,8 @@ router.post('/manual', async (req, res, next) => {
             name: blockName.trim(),
             type: 'BLOCK',
             parentId: district.id,
+            stateCode: state.stateCode,
+            districtCode: district.districtCode,
           })
           .returning();
         block = newBlock;
@@ -195,6 +297,11 @@ router.post('/manual', async (req, res, next) => {
               name: villageName.trim(),
               type: 'VILLAGE',
               parentId: block.id,
+              stateCode: state.stateCode,
+              districtCode: district.districtCode,
+              blockCode: block.blockCode,
+              latitude: latitude ? String(latitude) : null,
+              longitude: longitude ? String(longitude) : null,
             })
             .returning();
           village = newVillage;
@@ -210,4 +317,3 @@ router.post('/manual', async (req, res, next) => {
 });
 
 export default router;
-

@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { assessmentInputs, schemeConfigs, financialRuns, repaymentScheduleItems } from '../db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import { FinancialInputs } from '../modules/finance/schemas/finance.schema';
 import { 
   resolveScheme, 
@@ -20,12 +20,25 @@ export async function getFinanceInputsForAssessment(assessmentId: string): Promi
   for (const input of inputs) {
     if (input.valueNumber !== null && input.valueNumber !== undefined) {
       const val = input.valueNumber;
-      if (input.inputKey === 'available_margin_capital') result.availableMarginCapital = val;
-      else if (input.inputKey === 'expected_monthly_revenue') result.expectedMonthlyRevenue = val;
-      else if (input.inputKey === 'expected_monthly_operating_cost') result.expectedMonthlyOperatingCost = val;
-      else if (input.inputKey === 'requested_tenure_months') result.requestedTenureMonths = Number(val);
-      else if (input.inputKey === 'requested_interest_rate') result.requestedInterestRate = val;
-      else if (input.inputKey === 'requested_moratorium_months') result.requestedMoratoriumMonths = Number(val);
+      // Canonicalize own contribution aliases
+      if (input.inputKey === 'own_contribution' || input.inputKey === 'available_margin_capital' || input.inputKey === 'initial_own_capital') {
+        result.ownContribution = val;
+        result.availableMarginCapital = val;
+      } else if (input.inputKey === 'project_cost' || input.inputKey === 'estimated_total_project_cost' || input.inputKey === 'estimated_project_cost') {
+        result.projectCost = val;
+      } else if (input.inputKey === 'available_cash_funds' || input.inputKey === 'cash_savings') {
+        result.availableCashFunds = val;
+      } else if (input.inputKey === 'expected_monthly_revenue') {
+        result.expectedMonthlyRevenue = val;
+      } else if (input.inputKey === 'expected_monthly_operating_cost') {
+        result.expectedMonthlyOperatingCost = val;
+      } else if (input.inputKey === 'requested_tenure_months') {
+        result.requestedTenureMonths = Number(val);
+      } else if (input.inputKey === 'requested_interest_rate') {
+        result.requestedInterestRate = val;
+      } else if (input.inputKey === 'requested_moratorium_months') {
+        result.requestedMoratoriumMonths = Number(val);
+      }
     }
     if (input.valueText !== null && input.valueText !== undefined) {
       if (input.inputKey === 'requested_moratorium_interest_treatment') {
@@ -40,21 +53,33 @@ export async function getFinanceInputsForAssessment(assessmentId: string): Promi
 }
 
 export async function runAndPersistFinanceCalculation(assessmentId: string, inputs: FinancialInputs) {
-  // 1. Resolve scheme
-  const availableMarginCapital = new Decimal(inputs.availableMarginCapital);
-  const projectCost = availableMarginCapital.mul(10);
-  
+  // 1. Determine project cost
+  let projectCost: Decimal;
+  const rawMargin = inputs.ownContribution ?? inputs.availableMarginCapital;
+
+  if (inputs.projectCost !== undefined && inputs.projectCost !== null && inputs.projectCost !== '') {
+    projectCost = new Decimal(inputs.projectCost);
+  } else if (rawMargin !== undefined && rawMargin !== null && rawMargin !== '') {
+    // 10% minimum margin derived project cost
+    projectCost = new Decimal(rawMargin).mul(10);
+  } else {
+    throw new Error('Either projectCost or own contribution must be provided.');
+  }
+
+  // 2. Resolve scheme
   const schemeCode = resolveScheme(projectCost);
   
   if (schemeCode === 'NOT_ELIGIBLE') {
     return {
       status: 'NOT_ELIGIBLE',
       projectCost: projectCost.toNumber(),
-      message: 'Project cost exceeds maximum eligible amount'
+      message: projectCost.gt(5000000)
+        ? 'Project cost exceeds the maximum eligible limit of ₹50,00,000 for government financing schemes.'
+        : 'Project cost must be greater than ₹0 to be eligible for financing.',
     };
   }
 
-  // 2. Fetch scheme config
+  // 3. Fetch scheme config from DB
   const [scheme] = await db
     .select()
     .from(schemeConfigs)
@@ -70,7 +95,7 @@ export async function runAndPersistFinanceCalculation(assessmentId: string, inpu
     throw new Error(`Active scheme configuration not found for code: ${schemeCode}`);
   }
 
-  // 3. Convert scheme DB entity to domain SchemeConfig without losing string precision
+  // 4. Convert scheme DB entity to domain SchemeConfig without losing string precision
   const schemeConfigDomain = {
     ...scheme,
     minProjectCost: scheme.minProjectCost ?? null,
@@ -80,16 +105,16 @@ export async function runAndPersistFinanceCalculation(assessmentId: string, inpu
     interestRate: scheme.interestRate ?? null,
   };
 
-  // 4. Run deterministic calculation
+  // 5. Run deterministic calculation
   const result = runFinanceCalculation(inputs, schemeConfigDomain);
 
-  // 5. Persist run and schedule in transaction
+  // 6. Persist run and schedule in transaction
   return await db.transaction(async (tx) => {
     const [run] = await tx.insert(financialRuns).values({
       assessmentId,
       schemeConfigId: scheme.id,
       projectCost: String(result.loanStructure.projectCost),
-      ownContribution: String(result.loanStructure.requiredOwnContribution),
+      ownContribution: String(result.loanStructure.availableMarginCapital),
       loanAmount: String(result.loanStructure.loanAmount),
       monthlyRevenue: inputs.expectedMonthlyRevenue !== undefined && inputs.expectedMonthlyRevenue !== null ? String(inputs.expectedMonthlyRevenue) : null,
       monthlyOperatingCost: inputs.expectedMonthlyOperatingCost !== undefined && inputs.expectedMonthlyOperatingCost !== null ? String(inputs.expectedMonthlyOperatingCost) : null,
@@ -97,12 +122,12 @@ export async function runAndPersistFinanceCalculation(assessmentId: string, inpu
       tenureMonths: scheme.tenureMonths!,
       moratoriumMonths: scheme.moratoriumMonths!,
       paymentFrequency: scheme.paymentFrequency!,
-      emi: null, // Depending on if frequency is MONTHLY, otherwise installmentAmount covers it
-      installmentAmount: String(result.installmentAmount),
+      emi: null,
+      installmentAmount: result.isScheduleCalculable ? String(result.installmentAmount) : null,
       annualDebtService: result.dscrResult.annualDebtService ? String(result.dscrResult.annualDebtService) : null,
       dscr: result.dscrResult.dscr ? String(result.dscrResult.dscr) : null,
-      totalInterest: String(result.totalInterest),
-      totalRepayment: String(result.totalRepayment),
+      totalInterest: result.isScheduleCalculable ? String(result.totalInterest) : null,
+      totalRepayment: result.isScheduleCalculable ? String(result.totalRepayment) : null,
       calculationVersion: result.calculationVersion,
     }).returning();
 
@@ -150,8 +175,46 @@ export async function runAndPersistFinanceCalculation(assessmentId: string, inpu
     return {
       status: 'SUCCESS',
       runId: run.id,
-      financeResult: result,
       schemeCode,
+      schemeName: scheme.schemeName,
+      financeResult: result,
     };
   });
+}
+
+export async function getLatestFinancialRun(assessmentId: string) {
+  const latestRun = await db
+    .select()
+    .from(financialRuns)
+    .where(eq(financialRuns.assessmentId, assessmentId))
+    .orderBy(desc(financialRuns.createdAt))
+    .limit(1);
+
+  if (!latestRun.length) {
+    return null;
+  }
+
+  const run = latestRun[0];
+
+  const schedule = await db
+    .select()
+    .from(repaymentScheduleItems)
+    .where(eq(repaymentScheduleItems.financialRunId, run.id))
+    .orderBy(repaymentScheduleItems.sequenceNumber);
+
+  let scheme = null;
+  if (run.schemeConfigId) {
+    const schemes = await db
+      .select()
+      .from(schemeConfigs)
+      .where(eq(schemeConfigs.id, run.schemeConfigId))
+      .limit(1);
+    scheme = schemes[0] || null;
+  }
+
+  return {
+    run,
+    schedule,
+    scheme,
+  };
 }

@@ -9,7 +9,9 @@ export const FINANCE_CALCULATION_VERSION = 'v1';
 export type MoratoriumInterestTreatment = 'CAPITALIZE' | 'PAY_CURRENT' | 'UNKNOWN';
 
 export function resolveScheme(projectCost: Decimal): 'MICRO_FINANCE' | 'TERM_LOAN' | 'NOT_ELIGIBLE' {
-  if (projectCost.lte(140000)) {
+  if (projectCost.lte(0)) {
+    return 'NOT_ELIGIBLE';
+  } else if (projectCost.lte(140000)) {
     return 'MICRO_FINANCE';
   } else if (projectCost.gt(140000) && projectCost.lte(5000000)) {
     return 'TERM_LOAN';
@@ -23,13 +25,38 @@ export interface LoanStructure {
   availableMarginCapital: Decimal;
   requiredOwnContribution: Decimal;
   shortfall: Decimal;
+  baseLoanAmount: Decimal;
   loanAmount: Decimal;
+  theoretical10PercentMargin: Decimal;
+  financingPercentage: Decimal;
 }
 
 export function calculateLoanStructure(inputs: FinancialInputs, scheme: SchemeConfig): LoanStructure {
-  const availableMarginCapital = new Decimal(inputs.availableMarginCapital);
-  // Formula: projectCost = availableMarginCapital / 0.10
-  const projectCost = availableMarginCapital.mul(10);
+  let projectCost: Decimal;
+  let availableMarginCapital: Decimal;
+
+  const rawMargin = inputs.ownContribution ?? inputs.availableMarginCapital;
+  if (rawMargin !== undefined && rawMargin !== null && rawMargin !== '') {
+    availableMarginCapital = new Decimal(rawMargin);
+  } else {
+    availableMarginCapital = new Decimal(0);
+  }
+
+  if (inputs.projectCost !== undefined && inputs.projectCost !== null && inputs.projectCost !== '') {
+    projectCost = new Decimal(inputs.projectCost);
+  } else if (rawMargin !== undefined && rawMargin !== null && rawMargin !== '') {
+    // 10% minimum margin derived calculation when project cost is not explicitly provided
+    projectCost = availableMarginCapital.mul(10);
+  } else {
+    throw new Error('Either projectCost or own contribution must be provided.');
+  }
+
+  if (projectCost.lt(0)) {
+    throw new Error('Project cost cannot be negative');
+  }
+  if (availableMarginCapital.lt(0)) {
+    throw new Error('Own contribution cannot be negative');
+  }
 
   // Validate limits if defined by the scheme
   if (scheme.minProjectCost !== null && scheme.minProjectCost !== undefined) {
@@ -44,20 +71,23 @@ export function calculateLoanStructure(inputs: FinancialInputs, scheme: SchemeCo
     }
   }
 
-  // Determine loan amount based on scheme financing percentage
-  let baseLoanAmount = new Decimal(0);
-  if (scheme.financingPercentage !== null && scheme.financingPercentage !== undefined) {
-    // Financing percentage is a percentage (e.g. 90 for 90%)
-    baseLoanAmount = projectCost.mul(scheme.financingPercentage).div(100);
-  } else {
-     baseLoanAmount = projectCost; // Fallback if no financing percentage
-  }
+  // Determine loan amount based on scheme financing percentage (default 90%)
+  const finPct = scheme.financingPercentage !== null && scheme.financingPercentage !== undefined
+    ? new Decimal(scheme.financingPercentage)
+    : new Decimal(90);
+
+  const rawBaseLoan = projectCost.mul(finPct).div(100);
+  let baseLoanAmount = rawBaseLoan;
 
   if (scheme.maxLoanAmount !== null && scheme.maxLoanAmount !== undefined) {
     const maxLoan = new Decimal(scheme.maxLoanAmount);
     if (baseLoanAmount.gt(maxLoan)) {
       baseLoanAmount = maxLoan;
     }
+  }
+
+  if (baseLoanAmount.lt(0)) {
+    baseLoanAmount = new Decimal(0);
   }
 
   // Actual required own contribution based on final loan
@@ -69,12 +99,17 @@ export function calculateLoanStructure(inputs: FinancialInputs, scheme: SchemeCo
     shortfall = new Decimal(0);
   }
 
+  const theoretical10PercentMargin = projectCost.mul(0.10);
+
   return {
     projectCost: projectCost.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
     availableMarginCapital: availableMarginCapital.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
     requiredOwnContribution: requiredOwnContribution.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
     shortfall: shortfall.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    baseLoanAmount: rawBaseLoan.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
     loanAmount: baseLoanAmount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    theoretical10PercentMargin: theoretical10PercentMargin.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    financingPercentage: finPct.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
   };
 }
 
@@ -130,10 +165,15 @@ export function calculateEMI(
 }
 
 export interface DSCRResult {
+  monthlyProjectedRevenue: Decimal | null;
+  monthlyOperatingCosts: Decimal | null;
   monthlyOperatingSurplus: Decimal | null;
+  annualOperatingSurplus: Decimal | null;
   annualCashAvailable: Decimal | null;
   annualDebtService: Decimal;
   dscr: Decimal | null;
+  status: 'SUFFICIENT' | 'TIGHT' | 'INSUFFICIENT' | 'UNAVAILABLE';
+  explanation: string;
 }
 
 export function calculateDSCR(
@@ -143,36 +183,63 @@ export function calculateDSCR(
   frequency: PaymentFrequency
 ): DSCRResult {
   const periodsPerYear = getPeriodsPerYear(frequency);
-  const annualDebtService = periodicInstallment.mul(periodsPerYear);
+  const annualDebtService = periodicInstallment.mul(periodsPerYear).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 
   if (expectedMonthlyRevenue === null || expectedMonthlyRevenue === undefined ||
       expectedMonthlyOperatingCost === null || expectedMonthlyOperatingCost === undefined) {
     return {
+      monthlyProjectedRevenue: null,
+      monthlyOperatingCosts: null,
       monthlyOperatingSurplus: null,
+      annualOperatingSurplus: null,
       annualCashAvailable: null,
       annualDebtService,
       dscr: null,
+      status: 'UNAVAILABLE',
+      explanation: 'DSCR cannot be computed because projected revenue or operating cost inputs are not provided.',
     };
   }
 
-  const rev = expectedMonthlyRevenue;
-  const cost = expectedMonthlyOperatingCost;
+  const rev = expectedMonthlyRevenue.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  const cost = expectedMonthlyOperatingCost.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 
-  const monthlyOperatingSurplus = rev.minus(cost);
-  const annualCashAvailable = monthlyOperatingSurplus.mul(12);
+  const monthlyOperatingSurplus = rev.minus(cost).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  const annualOperatingSurplus = monthlyOperatingSurplus.mul(12).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+  const annualCashAvailable = annualOperatingSurplus;
 
   let dscr: Decimal | null = null;
+  let status: 'SUFFICIENT' | 'TIGHT' | 'INSUFFICIENT' | 'UNAVAILABLE' = 'UNAVAILABLE';
+  let explanation = '';
 
   if (annualDebtService.gt(0)) {
-    // DSCR = annual cash available / annual debt service
-    dscr = annualCashAvailable.div(annualDebtService).toDecimalPlaces(4, Decimal.ROUND_HALF_UP);
+    dscr = annualOperatingSurplus.div(annualDebtService).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    if (dscr.gte(1.5)) {
+      status = 'SUFFICIENT';
+      explanation = 'Strong debt service coverage: projected operating cash flow comfortably covers scheduled loan repayments with an adequate safety buffer (DSCR >= 1.5).';
+    } else if (dscr.gte(1.0)) {
+      status = 'TIGHT';
+      explanation = 'Moderate debt service coverage: projected operating cash flow meets debt obligations but with a tight margin (1.0 <= DSCR < 1.5).';
+    } else {
+      status = 'INSUFFICIENT';
+      explanation = 'Insufficient debt service coverage: projected operating surplus is less than scheduled debt obligations, posing repayment risk (DSCR < 1.0).';
+    }
+  } else if (annualOperatingSurplus.gte(0)) {
+    explanation = 'No scheduled debt service obligation active for this calculation.';
+  } else {
+    status = 'INSUFFICIENT';
+    explanation = 'Negative operating surplus with zero debt service.';
   }
 
   return {
+    monthlyProjectedRevenue: rev,
+    monthlyOperatingCosts: cost,
     monthlyOperatingSurplus,
+    annualOperatingSurplus,
     annualCashAvailable,
     annualDebtService,
     dscr,
+    status,
+    explanation,
   };
 }
 
@@ -235,11 +302,11 @@ export function generateRepaymentSchedule(
 
     schedule.push({
       sequenceNumber: sequenceNumber++,
-      openingPrincipal: currentPrincipal,
-      principalPayment: principalPayment,
-      interestPayment: interestPayment,
-      installmentAmount: installmentAmount,
-      closingPrincipal: closingPrincipal,
+      openingPrincipal: currentPrincipal.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+      principalPayment: principalPayment.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+      interestPayment: interestPayment.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+      installmentAmount: installmentAmount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+      closingPrincipal: closingPrincipal.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
       isMoratorium: true,
     });
 
@@ -259,11 +326,11 @@ export function generateRepaymentSchedule(
     const isLastPeriod = i === totalRepaymentPeriods - 1;
     const interestPayment = currentPrincipal.mul(periodicRate).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
 
-    let principalPayment = periodicInstallment.minus(interestPayment);
-    let closingPrincipal = currentPrincipal.minus(principalPayment);
+    let principalPayment = periodicInstallment.minus(interestPayment).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    let closingPrincipal = currentPrincipal.minus(principalPayment).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
     let finalInstallment = periodicInstallment;
 
-    // Handle rounding on the last period
+    // Handle exact principal absorption on the final period
     if (isLastPeriod) {
       principalPayment = currentPrincipal;
       finalInstallment = principalPayment.plus(interestPayment);
@@ -272,11 +339,11 @@ export function generateRepaymentSchedule(
 
     schedule.push({
       sequenceNumber: sequenceNumber++,
-      openingPrincipal: currentPrincipal,
-      principalPayment: principalPayment,
-      interestPayment: interestPayment,
-      installmentAmount: finalInstallment,
-      closingPrincipal: closingPrincipal,
+      openingPrincipal: currentPrincipal.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+      principalPayment: principalPayment.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+      interestPayment: interestPayment.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+      installmentAmount: finalInstallment.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+      closingPrincipal: closingPrincipal.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
       isMoratorium: false,
     });
 
@@ -288,11 +355,23 @@ export function generateRepaymentSchedule(
 
 export interface FullFinanceResult {
   loanStructure: LoanStructure;
+  annualInterestRate: Decimal;
+  quarterlyPeriodicRate: Decimal;
+  totalTenureMonths: number;
+  moratoriumMonths: number;
+  activeRepaymentMonths: number;
+  numberOfRepayments: number;
+  paymentFrequency: PaymentFrequency;
+  moratoriumInterestTreatment: MoratoriumInterestTreatment;
   installmentAmount: Decimal;
+  annualDebtService: Decimal;
   dscrResult: DSCRResult;
   schedule: ScheduleItem[];
+  totalPrincipal: Decimal;
   totalInterest: Decimal;
   totalRepayment: Decimal;
+  isScheduleCalculable: boolean;
+  scheduleUnavailableReason?: string;
   calculationVersion: string;
 }
 
@@ -301,7 +380,7 @@ export function runFinanceCalculation(inputs: FinancialInputs, scheme: SchemeCon
 
   const annualInterestRate = new Decimal(
     inputs.requestedInterestRate ?? scheme.interestRate ?? 0
-  );
+  ).toDecimalPlaces(3, Decimal.ROUND_HALF_UP);
 
   const tenureMonths = inputs.requestedTenureMonths ?? scheme.tenureMonths;
   if (!tenureMonths) {
@@ -309,13 +388,58 @@ export function runFinanceCalculation(inputs: FinancialInputs, scheme: SchemeCon
   }
 
   const moratoriumMonths = inputs.requestedMoratoriumMonths ?? scheme.moratoriumMonths ?? 0;
+  const activeRepaymentMonths = tenureMonths - moratoriumMonths;
 
-  const frequency = inputs.requestedPaymentFrequency ?? scheme.paymentFrequency ?? 'MONTHLY';
+  const frequency = inputs.requestedPaymentFrequency ?? scheme.paymentFrequency ?? 'QUARTERLY';
+  const periodsPerYear = getPeriodsPerYear(frequency);
+  const monthsPerPeriod = 12 / periodsPerYear;
+  const numberOfRepayments = activeRepaymentMonths / monthsPerPeriod;
+  const quarterlyPeriodicRate = annualInterestRate.div(periodsPerYear).toDecimalPlaces(4, Decimal.ROUND_HALF_UP);
 
   const rawMoratoriumTreatment = inputs.requestedMoratoriumInterestTreatment ?? scheme.moratoriumInterestTreatment ?? 'UNKNOWN';
   let moratoriumInterestTreatment: MoratoriumInterestTreatment = 'UNKNOWN';
   if (rawMoratoriumTreatment === 'CAPITALIZE' || rawMoratoriumTreatment === 'PAY_CURRENT' || rawMoratoriumTreatment === 'UNKNOWN') {
      moratoriumInterestTreatment = rawMoratoriumTreatment;
+  }
+
+  // Handle UNKNOWN moratorium safely without throwing/crashing the whole calculation
+  if (moratoriumMonths > 0 && moratoriumInterestTreatment === 'UNKNOWN') {
+    const expectedRev = inputs.expectedMonthlyRevenue !== null && inputs.expectedMonthlyRevenue !== undefined
+      ? new Decimal(inputs.expectedMonthlyRevenue)
+      : null;
+
+    const expectedCost = inputs.expectedMonthlyOperatingCost !== null && inputs.expectedMonthlyOperatingCost !== undefined
+      ? new Decimal(inputs.expectedMonthlyOperatingCost)
+      : null;
+
+    const dscrResult = calculateDSCR(
+      expectedRev,
+      expectedCost,
+      new Decimal(0),
+      frequency
+    );
+
+    return {
+      loanStructure,
+      annualInterestRate,
+      quarterlyPeriodicRate,
+      totalTenureMonths: tenureMonths,
+      moratoriumMonths,
+      activeRepaymentMonths,
+      numberOfRepayments,
+      paymentFrequency: frequency,
+      moratoriumInterestTreatment,
+      installmentAmount: new Decimal(0),
+      annualDebtService: new Decimal(0),
+      dscrResult,
+      schedule: [],
+      totalPrincipal: loanStructure.loanAmount,
+      totalInterest: new Decimal(0),
+      totalRepayment: loanStructure.loanAmount,
+      isScheduleCalculable: false,
+      scheduleUnavailableReason: 'Exact repayment schedule calculation requires applicable moratorium interest treatment (CAPITALIZE or PAY_CURRENT). Moratorium duration is noted but exact schedule remains provisional.',
+      calculationVersion: FINANCE_CALCULATION_VERSION,
+    };
   }
 
   const schedule = generateRepaymentSchedule(
@@ -329,11 +453,13 @@ export function runFinanceCalculation(inputs: FinancialInputs, scheme: SchemeCon
 
   let totalInterest = new Decimal(0);
   let totalRepayment = new Decimal(0);
+  let totalPrincipal = new Decimal(0);
   let activeInstallmentAmount = new Decimal(0);
 
   schedule.forEach(item => {
     totalInterest = totalInterest.plus(item.interestPayment);
     totalRepayment = totalRepayment.plus(item.installmentAmount);
+    totalPrincipal = totalPrincipal.plus(item.principalPayment);
     if (!item.isMoratorium && activeInstallmentAmount.eq(0)) {
        activeInstallmentAmount = item.installmentAmount;
     }
@@ -359,13 +485,27 @@ export function runFinanceCalculation(inputs: FinancialInputs, scheme: SchemeCon
     frequency
   );
 
+  const annualDebtService = activeInstallmentAmount.mul(periodsPerYear).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+
   return {
     loanStructure,
-    installmentAmount: activeInstallmentAmount,
+    annualInterestRate,
+    quarterlyPeriodicRate,
+    totalTenureMonths: tenureMonths,
+    moratoriumMonths,
+    activeRepaymentMonths,
+    numberOfRepayments,
+    paymentFrequency: frequency,
+    moratoriumInterestTreatment,
+    installmentAmount: activeInstallmentAmount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    annualDebtService,
     dscrResult,
     schedule,
-    totalInterest,
-    totalRepayment,
+    totalPrincipal: totalPrincipal.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    totalInterest: totalInterest.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    totalRepayment: totalRepayment.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    isScheduleCalculable: true,
     calculationVersion: FINANCE_CALCULATION_VERSION,
   };
 }
+

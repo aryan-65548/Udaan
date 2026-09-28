@@ -81,6 +81,16 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
         language: data.language,
         status: 'IN_PROGRESS',
         aiStatus: 'NOT_STARTED',
+        locationSelectionMethod: data.locationSelectionMethod || 'ADMINISTRATIVE',
+        countryCode: data.countryCode || 'IN',
+        stateName: data.stateName,
+        districtName: data.districtName,
+        blockName: data.blockName,
+        villageName: data.villageName,
+        formattedAddress: data.formattedAddress,
+        latitude: data.latitude ? String(data.latitude) : null,
+        longitude: data.longitude ? String(data.longitude) : null,
+        googlePlaceId: data.googlePlaceId,
       })
       .returning();
 
@@ -229,6 +239,16 @@ router.patch('/:id', async (req: AuthenticatedRequest, res, next) => {
         ...(data.locationId !== undefined && { locationId: data.locationId }),
         ...(data.businessCategoryId !== undefined && { businessCategoryId: data.businessCategoryId }),
         ...(data.language !== undefined && { language: data.language }),
+        ...(data.locationSelectionMethod !== undefined && { locationSelectionMethod: data.locationSelectionMethod }),
+        ...(data.countryCode !== undefined && { countryCode: data.countryCode }),
+        ...(data.stateName !== undefined && { stateName: data.stateName }),
+        ...(data.districtName !== undefined && { districtName: data.districtName }),
+        ...(data.blockName !== undefined && { blockName: data.blockName }),
+        ...(data.villageName !== undefined && { villageName: data.villageName }),
+        ...(data.formattedAddress !== undefined && { formattedAddress: data.formattedAddress }),
+        ...(data.latitude !== undefined && { latitude: data.latitude ? String(data.latitude) : null }),
+        ...(data.longitude !== undefined && { longitude: data.longitude ? String(data.longitude) : null }),
+        ...(data.googlePlaceId !== undefined && { googlePlaceId: data.googlePlaceId }),
         updatedAt: new Date(),
       })
       .where(eq(assessments.id, id))

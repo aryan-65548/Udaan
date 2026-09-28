@@ -32,7 +32,9 @@ describe('Locations Unit & Seed Tests', () => {
 
       (db.select as jest.Mock).mockReturnValue({
         from: jest.fn().mockReturnValue({
-          where: jest.fn().mockResolvedValue(mockStates),
+          where: jest.fn().mockReturnValue({
+            orderBy: jest.fn().mockResolvedValue(mockStates),
+          }),
         }),
       });
 
@@ -44,7 +46,9 @@ describe('Locations Unit & Seed Tests', () => {
     it('handles database failure with 500 error', async () => {
       (db.select as jest.Mock).mockReturnValue({
         from: jest.fn().mockReturnValue({
-          where: jest.fn().mockRejectedValue(new Error('Database error')),
+          where: jest.fn().mockReturnValue({
+            orderBy: jest.fn().mockRejectedValue(new Error('Database error')),
+          }),
         }),
       });
 
@@ -63,7 +67,9 @@ describe('Locations Unit & Seed Tests', () => {
 
       (db.select as jest.Mock).mockReturnValue({
         from: jest.fn().mockReturnValue({
-          where: jest.fn().mockResolvedValue(mockDistricts),
+          where: jest.fn().mockReturnValue({
+            orderBy: jest.fn().mockResolvedValue(mockDistricts),
+          }),
         }),
       });
 
@@ -88,7 +94,9 @@ describe('Locations Unit & Seed Tests', () => {
 
       (db.select as jest.Mock).mockReturnValue({
         from: jest.fn().mockReturnValue({
-          where: jest.fn().mockResolvedValue(mockBlocks),
+          where: jest.fn().mockReturnValue({
+            orderBy: jest.fn().mockResolvedValue(mockBlocks),
+          }),
         }),
       });
 
@@ -107,7 +115,13 @@ describe('Locations Unit & Seed Tests', () => {
 
       (db.select as jest.Mock).mockReturnValue({
         from: jest.fn().mockReturnValue({
-          where: jest.fn().mockResolvedValue(mockVillages),
+          where: jest.fn().mockReturnValue({
+            orderBy: jest.fn().mockReturnValue({
+              limit: jest.fn().mockReturnValue({
+                offset: jest.fn().mockResolvedValue(mockVillages),
+              }),
+            }),
+          }),
         }),
       });
 

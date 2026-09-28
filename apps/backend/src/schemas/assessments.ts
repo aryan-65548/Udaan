@@ -13,12 +13,48 @@ export const createAssessmentSchema = z.object({
   locationId: z.string().uuid('Invalid location ID'),
   businessCategoryId: z.string().uuid('Invalid business category ID'),
   language: z.enum(['en', 'hi', 'gu']).default('en'),
+  locationSelectionMethod: z.enum(['ADMINISTRATIVE', 'GOOGLE_MAPS']).default('ADMINISTRATIVE'),
+  countryCode: z.string().max(10).default('IN'),
+  stateName: z.string().max(150).optional().nullable(),
+  districtName: z.string().max(150).optional().nullable(),
+  blockName: z.string().max(150).optional().nullable(),
+  villageName: z.string().max(150).optional().nullable(),
+  formattedAddress: z.string().optional().nullable(),
+  latitude: z.union([z.number(), z.string()]).optional().nullable().refine((val) => {
+    if (val === null || val === undefined || val === '') return true;
+    const n = Number(val);
+    return !isNaN(n) && isFinite(n) && n >= -90 && n <= 90;
+  }, { message: 'Latitude must be a valid number between -90 and 90' }),
+  longitude: z.union([z.number(), z.string()]).optional().nullable().refine((val) => {
+    if (val === null || val === undefined || val === '') return true;
+    const n = Number(val);
+    return !isNaN(n) && isFinite(n) && n >= -180 && n <= 180;
+  }, { message: 'Longitude must be a valid number between -180 and 180' }),
+  googlePlaceId: z.string().max(255).optional().nullable(),
 });
 
 export const updateAssessmentSchema = z.object({
   locationId: z.string().uuid('Invalid location ID').optional(),
   businessCategoryId: z.string().uuid('Invalid business category ID').optional(),
   language: z.enum(['en', 'hi', 'gu']).optional(),
+  locationSelectionMethod: z.enum(['ADMINISTRATIVE', 'GOOGLE_MAPS']).optional(),
+  countryCode: z.string().max(10).optional(),
+  stateName: z.string().max(150).optional().nullable(),
+  districtName: z.string().max(150).optional().nullable(),
+  blockName: z.string().max(150).optional().nullable(),
+  villageName: z.string().max(150).optional().nullable(),
+  formattedAddress: z.string().optional().nullable(),
+  latitude: z.union([z.number(), z.string()]).optional().nullable().refine((val) => {
+    if (val === null || val === undefined || val === '') return true;
+    const n = Number(val);
+    return !isNaN(n) && isFinite(n) && n >= -90 && n <= 90;
+  }, { message: 'Latitude must be a valid number between -90 and 90' }),
+  longitude: z.union([z.number(), z.string()]).optional().nullable().refine((val) => {
+    if (val === null || val === undefined || val === '') return true;
+    const n = Number(val);
+    return !isNaN(n) && isFinite(n) && n >= -180 && n <= 180;
+  }, { message: 'Longitude must be a valid number between -180 and 180' }),
+  googlePlaceId: z.string().max(255).optional().nullable(),
 }).refine(data => Object.keys(data).length > 0, {
   message: 'At least one field must be provided for update',
 });

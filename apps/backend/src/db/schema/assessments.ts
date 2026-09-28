@@ -2,6 +2,8 @@ import {
   pgTable,
   uuid,
   varchar,
+  text,
+  decimal,
   timestamp,
   pgEnum,
   index,
@@ -45,6 +47,21 @@ export const assessments = pgTable(
     status: assessmentStatusEnum('status').notNull().default('IN_PROGRESS'),
     aiStatus: aiStatusEnum('ai_status').notNull().default('NOT_STARTED'),
     aiSessionId: varchar('ai_session_id', { length: 100 }),
+
+    // Unified Location Details (Administrative or Google Maps)
+    locationSelectionMethod: varchar('location_selection_method', { length: 30 })
+      .notNull()
+      .default('ADMINISTRATIVE'),
+    countryCode: varchar('country_code', { length: 10 }).notNull().default('IN'),
+    stateName: varchar('state_name', { length: 150 }),
+    districtName: varchar('district_name', { length: 150 }),
+    blockName: varchar('block_name', { length: 150 }),
+    villageName: varchar('village_name', { length: 150 }),
+    formattedAddress: text('formatted_address'),
+    latitude: decimal('latitude', { precision: 10, scale: 7 }),
+    longitude: decimal('longitude', { precision: 10, scale: 7 }),
+    googlePlaceId: varchar('google_place_id', { length: 255 }),
+
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp('completed_at', { withTimezone: true }),

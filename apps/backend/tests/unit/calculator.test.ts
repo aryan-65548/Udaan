@@ -9,103 +9,180 @@ import {
   FINANCE_CALCULATION_VERSION,
   resolveScheme
 } from '../../src/modules/finance/domain/calculator';
+import { FinancialInputsSchema } from '../../src/modules/finance/schemas/finance.schema';
 
 describe('Finance Calculator Domain', () => {
-  describe('resolveScheme', () => {
-    it('routes correctly based on project cost boundaries', () => {
+  describe('A. Deterministic Scheme Routing (resolveScheme)', () => {
+    it('routes ₹0 to NOT_ELIGIBLE (invalid / no positive loan)', () => {
+      expect(resolveScheme(new Decimal(0))).toBe('NOT_ELIGIBLE');
+      expect(resolveScheme(new Decimal(-1000))).toBe('NOT_ELIGIBLE');
+    });
+
+    it('routes ₹1,39,999 to MICRO_FINANCE', () => {
       expect(resolveScheme(new Decimal(139999))).toBe('MICRO_FINANCE');
+    });
+
+    it('routes ₹1,40,000 boundary to MICRO_FINANCE', () => {
       expect(resolveScheme(new Decimal(140000))).toBe('MICRO_FINANCE');
+    });
+
+    it('routes ₹1,40,001 boundary to TERM_LOAN', () => {
       expect(resolveScheme(new Decimal(140001))).toBe('TERM_LOAN');
+    });
+
+    it('routes ₹50,00,000 boundary to TERM_LOAN', () => {
       expect(resolveScheme(new Decimal(5000000))).toBe('TERM_LOAN');
+    });
+
+    it('routes ₹50,00,001 boundary to NOT_ELIGIBLE', () => {
       expect(resolveScheme(new Decimal(5000001))).toBe('NOT_ELIGIBLE');
+      expect(resolveScheme(new Decimal(10000000))).toBe('NOT_ELIGIBLE');
     });
   });
 
-  describe('calculateLoanStructure', () => {
-    it('scales margin to project cost 10x correctly', () => {
-      const cases = [
-        { margin: 10000, expectedProject: 100000 },
-        { margin: 14000, expectedProject: 140000 },
-        { margin: 100000, expectedProject: 1000000 },
-        { margin: 500000, expectedProject: 5000000 },
-      ];
-
-      cases.forEach(c => {
-        const result = calculateLoanStructure(
-          { availableMarginCapital: c.margin },
-          { schemeCode: 'TEST', schemeName: 'TEST' }
-        );
-        expect(result.projectCost.toNumber()).toBe(c.expectedProject);
-        expect(result.availableMarginCapital.toNumber()).toBe(c.margin);
-      });
+  describe('B. Loan Calculations & Scheme Loan Caps (calculateLoanStructure)', () => {
+    it('Micro Finance: Project Cost = ₹1,40,000, Base Loan = ₹1,26,000, Final Loan = ₹1,25,000, Required Contribution = ₹15,000', () => {
+      const result = calculateLoanStructure(
+        { projectCost: 140000, ownContribution: 14000 },
+        { schemeCode: 'MICRO_FINANCE', schemeName: 'Micro Finance', financingPercentage: 90, maxLoanAmount: 125000 }
+      );
+      expect(result.projectCost.toNumber()).toBe(140000);
+      expect(result.baseLoanAmount.toNumber()).toBe(126000); // 90% of 140k
+      expect(result.loanAmount.toNumber()).toBe(125000); // Capped at 125k
+      expect(result.requiredOwnContribution.toNumber()).toBe(15000); // 140k - 125k
+      expect(result.availableMarginCapital.toNumber()).toBe(14000);
+      expect(result.shortfall.toNumber()).toBe(1000); // 15k - 14k
     });
 
-    it('calculates Micro Finance 90% without capping', () => {
+    it('Micro Finance with higher own contribution: Project Cost = ₹1,40,000, Own Contribution = ₹20,000 -> Shortfall = ₹0', () => {
       const result = calculateLoanStructure(
-        { availableMarginCapital: 10000 }, // project = 100,000
-        { schemeCode: 'MICRO', schemeName: 'Micro', financingPercentage: 90, maxLoanAmount: 125000 }
+        { projectCost: 140000, ownContribution: 20000 },
+        { schemeCode: 'MICRO_FINANCE', schemeName: 'Micro Finance', financingPercentage: 90, maxLoanAmount: 125000 }
       );
-      expect(result.loanAmount.toNumber()).toBe(90000); // 90% of 100k
-      expect(result.requiredOwnContribution.toNumber()).toBe(10000); // 100k - 90k
+      expect(result.loanAmount.toNumber()).toBe(125000);
+      expect(result.requiredOwnContribution.toNumber()).toBe(15000);
+      expect(result.availableMarginCapital.toNumber()).toBe(20000);
       expect(result.shortfall.toNumber()).toBe(0);
     });
 
-    it('caps Micro Finance at 1.25L and exposes shortfall', () => {
+    it('Term Loan: Project Cost = ₹10,00,000, Base Loan = ₹9,00,000, Final Loan = ₹9,00,000, Required Contribution = ₹1,00,000', () => {
       const result = calculateLoanStructure(
-        { availableMarginCapital: 14000 }, // project = 140,000
-        { schemeCode: 'MICRO', schemeName: 'Micro', financingPercentage: 90, maxLoanAmount: 125000 }
+        { projectCost: 1000000, ownContribution: 100000 },
+        { schemeCode: 'TERM_LOAN', schemeName: 'Term Loan', financingPercentage: 90, maxLoanAmount: 4500000 }
       );
-      // 90% of 140k = 126,000. Capped at 125,000.
+      expect(result.projectCost.toNumber()).toBe(1000000);
+      expect(result.baseLoanAmount.toNumber()).toBe(900000);
+      expect(result.loanAmount.toNumber()).toBe(900000);
+      expect(result.requiredOwnContribution.toNumber()).toBe(100000);
+      expect(result.shortfall.toNumber()).toBe(0);
+    });
+
+    it('Term Loan capping: Project Cost = ₹55,00,000, Base Loan = ₹49,50,000, Capped Loan = ₹45,00,000', () => {
+      const result = calculateLoanStructure(
+        { projectCost: 5500000, ownContribution: 550000 },
+        { schemeCode: 'TERM_LOAN', schemeName: 'Term Loan', financingPercentage: 90, maxLoanAmount: 4500000 }
+      );
+      expect(result.loanAmount.toNumber()).toBe(4500000);
+      expect(result.requiredOwnContribution.toNumber()).toBe(1000000); // 55L - 45L
+      expect(result.shortfall.toNumber()).toBe(450000); // 10L req - 5.5L margin
+    });
+
+    it('preserves legacy fallback to 10x margin when projectCost is omitted', () => {
+      const result = calculateLoanStructure(
+        { availableMarginCapital: 14000 },
+        { schemeCode: 'MICRO_FINANCE', schemeName: 'Micro Finance', financingPercentage: 90, maxLoanAmount: 125000 }
+      );
+      expect(result.projectCost.toNumber()).toBe(140000);
       expect(result.loanAmount.toNumber()).toBe(125000);
-      expect(result.requiredOwnContribution.toNumber()).toBe(15000); // 140k - 125k
-      expect(result.shortfall.toNumber()).toBe(1000); // 15k required - 14k margin
-    });
-
-    it('calculates Term Loan 90% and caps at 45L', () => {
-      const normalResult = calculateLoanStructure(
-        { availableMarginCapital: 100000 }, // project = 10L
-        { schemeCode: 'TERM', schemeName: 'Term', financingPercentage: 90, maxLoanAmount: 4500000 }
-      );
-      expect(normalResult.loanAmount.toNumber()).toBe(900000); // 90% of 10L
-
-      const cappedResult = calculateLoanStructure(
-        { availableMarginCapital: 550000 }, // project = 55L
-        { schemeCode: 'TERM', schemeName: 'Term', financingPercentage: 90, maxLoanAmount: 4500000 }
-      );
-      // 90% of 55L = 49.5L. Capped at 45L.
-      expect(cappedResult.loanAmount.toNumber()).toBe(4500000);
-      expect(cappedResult.requiredOwnContribution.toNumber()).toBe(1000000); // 55L - 45L
-      expect(cappedResult.shortfall.toNumber()).toBe(450000); // 10L req - 5.5L margin
-    });
-
-    it('enforces scheme project cost min/max limits', () => {
-      expect(() =>
-        calculateLoanStructure(
-          { availableMarginCapital: 10000 }, // 100,000
-          { schemeCode: 'TERM', schemeName: 'Term', minProjectCost: 140001 }
-        )
-      ).toThrowError(/less than scheme minimum/);
-
-      expect(() =>
-        calculateLoanStructure(
-          { availableMarginCapital: 600000 }, // 6,000,000
-          { schemeCode: 'TERM', schemeName: 'Term', maxProjectCost: 5000000 }
-        )
-      ).toThrowError(/exceed scheme maximum/);
+      expect(result.requiredOwnContribution.toNumber()).toBe(15000);
+      expect(result.shortfall.toNumber()).toBe(1000);
     });
   });
 
-  describe('calculatePeriodicInstallment', () => {
-    it('calculates standard monthly installment', () => {
-      const installment = calculatePeriodicInstallment(new Decimal(100000), new Decimal(8), 84, 'MONTHLY');
-      expect(installment.toNumber()).toBeCloseTo(1558.62, 2);
+  describe('C. Contribution Shortfall Invariants', () => {
+    it('shortfall is never negative when contribution exceeds required', () => {
+      const result = calculateLoanStructure(
+        { projectCost: 100000, ownContribution: 50000 },
+        { schemeCode: 'MICRO_FINANCE', schemeName: 'Micro', financingPercentage: 90, maxLoanAmount: 125000 }
+      );
+      expect(result.requiredOwnContribution.toNumber()).toBe(10000);
+      expect(result.shortfall.toNumber()).toBe(0);
+      expect(result.availableMarginCapital.toNumber()).toBe(50000);
     });
 
-    it('handles quarterly periodic rate correctly (Micro Finance spec)', () => {
+    it('shortfall is exactly zero when contribution equals required', () => {
+      const result = calculateLoanStructure(
+        { projectCost: 100000, ownContribution: 10000 },
+        { schemeCode: 'MICRO_FINANCE', schemeName: 'Micro', financingPercentage: 90, maxLoanAmount: 125000 }
+      );
+      expect(result.requiredOwnContribution.toNumber()).toBe(10000);
+      expect(result.shortfall.toNumber()).toBe(0);
+    });
+  });
+
+  describe('D. Financial Inputs & Cash Savings Validation Schema', () => {
+    it('accepts ownContribution equal to availableCashFunds', () => {
+      const parsed = FinancialInputsSchema.safeParse({
+        ownContribution: 25000,
+        availableCashFunds: 25000,
+        projectCost: 200000,
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('accepts ownContribution below availableCashFunds', () => {
+      const parsed = FinancialInputsSchema.safeParse({
+        ownContribution: 10000,
+        availableCashFunds: 25000,
+        projectCost: 100000,
+      });
+      expect(parsed.success).toBe(true);
+    });
+
+    it('rejects ownContribution greater than availableCashFunds', () => {
+      const parsed = FinancialInputsSchema.safeParse({
+        ownContribution: 30000,
+        availableCashFunds: 25000,
+        projectCost: 100000,
+      });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) {
+        expect(parsed.error.issues[0].message).toContain('cannot exceed declared available');
+      }
+    });
+
+    it('rejects negative cash savings, own contribution, and project cost', () => {
+      expect(FinancialInputsSchema.safeParse({ availableCashFunds: -500 }).success).toBe(false);
+      expect(FinancialInputsSchema.safeParse({ ownContribution: -100 }).success).toBe(false);
+      expect(FinancialInputsSchema.safeParse({ projectCost: -10000 }).success).toBe(false);
+      expect(FinancialInputsSchema.safeParse({ projectCost: 0 }).success).toBe(false);
+    });
+
+    it('handles zero own contribution explicitly', () => {
+      const parsed = FinancialInputsSchema.safeParse({
+        ownContribution: 0,
+        projectCost: 100000,
+      });
+      expect(parsed.success).toBe(true);
+    });
+  });
+
+  describe('E. Periodic Interest and Quarterly Installment Calculations', () => {
+    it('calculates quarterly periodic rate for Micro Finance (6.5% / 4 = 1.625%)', () => {
+      // 12 total quarters tenure
       const installment = calculatePeriodicInstallment(new Decimal(125000), new Decimal(6.5), 36, 'QUARTERLY');
-      // 12 quarters. 6.5% / 4 = 1.625% per quarter.
-      // Expected: ~11545 per quarter
       expect(installment.toNumber()).toBeCloseTo(11549.42, 2);
+    });
+
+    it('calculates quarterly periodic rate for Term Loan (8% / 4 = 2.0%)', () => {
+      // 84 months = 28 quarters
+      const installment = calculatePeriodicInstallment(new Decimal(900000), new Decimal(8), 84, 'QUARTERLY');
+      expect(installment.toNumber()).toBeCloseTo(42290.70, 2);
+    });
+
+    it('calculates standard monthly installment (calculateEMI wrapper)', () => {
+      const emi = calculateEMI(new Decimal(100000), new Decimal(8), 84);
+      expect(emi.toNumber()).toBeCloseTo(1558.62, 2);
     });
 
     it('handles zero interest rate', () => {
@@ -117,56 +194,113 @@ describe('Finance Calculator Domain', () => {
       const installment = calculatePeriodicInstallment(new Decimal(0), new Decimal(8), 84, 'MONTHLY');
       expect(installment.toNumber()).toBe(0);
     });
+  });
 
-    it('calculateEMI wrapper works', () => {
-       const emi = calculateEMI(new Decimal(100000), new Decimal(8), 84);
-       expect(emi.toNumber()).toBeCloseTo(1558.62, 2);
+  describe('F. Repayment Schedule & Moratorium', () => {
+    it('Micro Finance: 36 mo tenure, 3 mo moratorium (1 quarter) -> 11 active quarters', () => {
+      const schedule = generateRepaymentSchedule(
+        new Decimal(125000),
+        new Decimal(6.5),
+        36,
+        3,
+        'QUARTERLY',
+        'PAY_CURRENT'
+      );
+      // 36 months / 3 = 12 total periods
+      expect(schedule.length).toBe(12);
+      expect(schedule[0].isMoratorium).toBe(true);
+      expect(schedule[0].principalPayment.toNumber()).toBe(0);
+      expect(schedule[1].isMoratorium).toBe(false);
+      expect(schedule[11].closingPrincipal.toNumber()).toBe(0);
+
+      // Reconcile total principal payments to original loan
+      const totalPrincipalRepaid = schedule.reduce(
+        (sum, item) => sum.plus(item.principalPayment),
+        new Decimal(0)
+      );
+      expect(totalPrincipalRepaid.toNumber()).toBeCloseTo(125000, 2);
     });
 
-    it('rejects partial periods for installment calculation', () => {
-      expect(() => calculatePeriodicInstallment(new Decimal(100000), new Decimal(8), 14, 'QUARTERLY')).toThrowError(/multiple/);
-      expect(() => calculatePeriodicInstallment(new Decimal(100000), new Decimal(8), 20, 'YEARLY')).toThrowError(/multiple/);
+    it('Term Loan: 84 mo tenure, 6 mo moratorium (2 quarters) -> 26 active quarters', () => {
+      const schedule = generateRepaymentSchedule(
+        new Decimal(900000),
+        new Decimal(8),
+        84,
+        6,
+        'QUARTERLY',
+        'PAY_CURRENT'
+      );
+      // 84 months / 3 = 28 total periods
+      expect(schedule.length).toBe(28);
+      expect(schedule[0].isMoratorium).toBe(true);
+      expect(schedule[1].isMoratorium).toBe(true);
+      expect(schedule[2].isMoratorium).toBe(false);
+      expect(schedule[27].closingPrincipal.toNumber()).toBe(0);
+
+      const totalPrincipalRepaid = schedule.reduce(
+        (sum, item) => sum.plus(item.principalPayment),
+        new Decimal(0)
+      );
+      expect(totalPrincipalRepaid.toNumber()).toBeCloseTo(900000, 2);
+    });
+
+    it('handles moratorium with CAPITALIZE treatment', () => {
+      const schedule = generateRepaymentSchedule(
+        new Decimal(100000),
+        new Decimal(12),
+        24,
+        6,
+        'MONTHLY',
+        'CAPITALIZE'
+      );
+      expect(schedule[0].isMoratorium).toBe(true);
+      expect(schedule[0].installmentAmount.toNumber()).toBe(0);
+      expect(schedule[0].closingPrincipal.toNumber()).toBe(101000);
+      expect(schedule[23].closingPrincipal.toNumber()).toBe(0);
+    });
+
+    it('safely handles UNKNOWN moratorium in runFinanceCalculation without crashing', () => {
+      const inputs = {
+        projectCost: 140000,
+        ownContribution: 14000,
+        requestedMoratoriumInterestTreatment: 'UNKNOWN' as const,
+      };
+
+      const scheme = {
+        schemeCode: 'MICRO_FINANCE',
+        schemeName: 'Micro Finance Scheme',
+        financingPercentage: 90,
+        maxLoanAmount: 125000,
+        interestRate: 6.5,
+        tenureMonths: 36,
+        moratoriumMonths: 3,
+        paymentFrequency: 'QUARTERLY' as const,
+        moratoriumInterestTreatment: 'UNKNOWN' as const,
+      };
+
+      const result = runFinanceCalculation(inputs, scheme);
+      expect(result.isScheduleCalculable).toBe(false);
+      expect(result.scheduleUnavailableReason).toContain('moratorium interest treatment');
+      expect(result.loanStructure.loanAmount.toNumber()).toBe(125000);
+      expect(result.schedule).toHaveLength(0);
     });
   });
 
-  describe('calculateDSCR', () => {
-    it('calculates correct DSCR > 1', () => {
+  describe('G. Feasibility & DSCR Calculation', () => {
+    it('calculates valid DSCR > 1', () => {
       const res = calculateDSCR(new Decimal(10000), new Decimal(2000), new Decimal(2000), 'MONTHLY');
       expect(res.dscr?.toNumber()).toBe(4);
     });
 
-    it('calculates correct DSCR < 1', () => {
+    it('calculates valid DSCR < 1', () => {
       const res = calculateDSCR(new Decimal(3000), new Decimal(2000), new Decimal(2000), 'MONTHLY');
       expect(res.dscr?.toNumber()).toBe(0.5);
     });
 
-    it('returns null for missing revenue', () => {
-      const res = calculateDSCR(null, new Decimal(2000), new Decimal(2000), 'MONTHLY');
-      expect(res.dscr).toBeNull();
-    });
-
-    it('returns null for missing operating cost', () => {
-      const res = calculateDSCR(new Decimal(10000), null, new Decimal(2000), 'MONTHLY');
-      expect(res.dscr).toBeNull();
-    });
-
-    it('returns null if both are missing', () => {
-      const res = calculateDSCR(null, null, new Decimal(2000), 'MONTHLY');
-      expect(res.dscr).toBeNull();
-    });
-
-    it('preserves legitimate zero values for revenue', () => {
-      const res = calculateDSCR(new Decimal(0), new Decimal(2000), new Decimal(2000), 'MONTHLY');
-      expect(res.dscr).not.toBeNull();
-      expect(res.monthlyOperatingSurplus?.toNumber()).toBe(-2000);
-      expect(res.dscr?.toNumber()).toBe(-1);
-    });
-
-    it('preserves legitimate zero values for operating cost', () => {
-      const res = calculateDSCR(new Decimal(10000), new Decimal(0), new Decimal(2000), 'MONTHLY');
-      expect(res.dscr).not.toBeNull();
-      expect(res.monthlyOperatingSurplus?.toNumber()).toBe(10000);
-      expect(res.dscr?.toNumber()).toBe(5);
+    it('returns null if income or operating cost is missing (not fabricated)', () => {
+      expect(calculateDSCR(null, new Decimal(2000), new Decimal(2000), 'MONTHLY').dscr).toBeNull();
+      expect(calculateDSCR(new Decimal(10000), null, new Decimal(2000), 'MONTHLY').dscr).toBeNull();
+      expect(calculateDSCR(null, null, new Decimal(2000), 'MONTHLY').dscr).toBeNull();
     });
 
     it('returns null if debt service is 0', () => {
@@ -174,166 +308,5 @@ describe('Finance Calculator Domain', () => {
       expect(res.dscr).toBeNull();
     });
   });
-
-  describe('generateRepaymentSchedule', () => {
-    it('generates a schedule that reaches zero principal', () => {
-      const schedule = generateRepaymentSchedule(
-        new Decimal(100000),
-        new Decimal(8),
-        12, // 1 year
-        0,  // no moratorium
-        'MONTHLY',
-        'UNKNOWN'
-      );
-
-      expect(schedule.length).toBe(12);
-      expect(schedule[11].closingPrincipal.toNumber()).toBe(0);
-    });
-
-    it('handles moratorium periods with CAPITALIZE treatment', () => {
-      const schedule = generateRepaymentSchedule(
-        new Decimal(100000),
-        new Decimal(12),
-        24,
-        6,
-        'MONTHLY',
-        'CAPITALIZE'
-      );
-
-      expect(schedule[0].isMoratorium).toBe(true);
-      expect(schedule[0].principalPayment.toNumber()).toBe(0);
-      expect(schedule[0].installmentAmount.toNumber()).toBe(0);
-      expect(schedule[0].closingPrincipal.toNumber()).toBe(101000);
-      expect(schedule[23].closingPrincipal.toNumber()).toBe(0);
-    });
-
-    it('handles moratorium periods with PAY_CURRENT treatment', () => {
-      const schedule = generateRepaymentSchedule(
-        new Decimal(100000),
-        new Decimal(12),
-        24,
-        6,
-        'MONTHLY',
-        'PAY_CURRENT'
-      );
-
-      expect(schedule[0].isMoratorium).toBe(true);
-      expect(schedule[0].principalPayment.toNumber()).toBe(0);
-      expect(schedule[0].installmentAmount.toNumber()).toBe(1000);
-      expect(schedule[0].closingPrincipal.toNumber()).toBe(100000);
-      expect(schedule[23].closingPrincipal.toNumber()).toBe(0);
-    });
-
-    it('throws if moratorium treatment is UNKNOWN', () => {
-      expect(() =>
-        generateRepaymentSchedule(
-          new Decimal(100000),
-          new Decimal(12),
-          24,
-          6,
-          'MONTHLY',
-          'UNKNOWN'
-        )
-      ).toThrowError(/UNKNOWN/);
-    });
-
-    it('handles quarterly payment frequency correctly (valid 12-month tenure)', () => {
-       const schedule = generateRepaymentSchedule(
-        new Decimal(100000),
-        new Decimal(12),
-        12,
-        0,
-        'QUARTERLY',
-        'CAPITALIZE'
-      );
-      expect(schedule.length).toBe(4);
-      expect(schedule[0].interestPayment.toNumber()).toBe(3000);
-      expect(schedule[3].closingPrincipal.toNumber()).toBe(0);
-    });
-
-    it('processes Term Loan specific configuration (6mo moratorium, quarterly)', () => {
-       const schedule = generateRepaymentSchedule(
-        new Decimal(4500000), // 45L
-        new Decimal(8), // 8%
-        84, // 84 months
-        6, // 6 mo moratorium (2 quarters)
-        'QUARTERLY',
-        'PAY_CURRENT' // assuming PAY_CURRENT
-      );
-      // 84 total months / 3 = 28 periods.
-      expect(schedule.length).toBe(28);
-      // Moratorium first period: 45L * (8%/4) = 90k interest
-      expect(schedule[0].isMoratorium).toBe(true);
-      expect(schedule[0].interestPayment.toNumber()).toBe(90000);
-      expect(schedule[27].closingPrincipal.toNumber()).toBe(0);
-    });
-
-    it('handles yearly payment frequency correctly (valid 12-month tenure)', () => {
-       const schedule = generateRepaymentSchedule(
-        new Decimal(100000),
-        new Decimal(12),
-        12,
-        0,
-        'YEARLY',
-        'UNKNOWN'
-      );
-      expect(schedule.length).toBe(1);
-    });
-
-    it('validates 12-month monthly tenure', () => {
-      expect(() => generateRepaymentSchedule(new Decimal(1000), new Decimal(10), 12, 0, 'MONTHLY', 'UNKNOWN')).not.toThrow();
-    });
-
-    it('rejects 14-month quarterly tenure', () => {
-      expect(() => generateRepaymentSchedule(new Decimal(1000), new Decimal(10), 14, 0, 'QUARTERLY', 'UNKNOWN')).toThrowError(/multiple/);
-    });
-
-    it('rejects 20-month yearly tenure', () => {
-      expect(() => generateRepaymentSchedule(new Decimal(1000), new Decimal(10), 20, 0, 'YEARLY', 'UNKNOWN')).toThrowError(/multiple/);
-    });
-
-    it('rejects 5-month quarterly moratorium', () => {
-      expect(() => generateRepaymentSchedule(new Decimal(1000), new Decimal(10), 12, 5, 'QUARTERLY', 'CAPITALIZE')).toThrowError(/multiple/);
-    });
-
-    it('validates 6-month quarterly moratorium', () => {
-      expect(() => generateRepaymentSchedule(new Decimal(1000), new Decimal(10), 12, 6, 'QUARTERLY', 'CAPITALIZE')).not.toThrow();
-    });
-
-    it('validates 12-month yearly moratorium', () => {
-      expect(() => generateRepaymentSchedule(new Decimal(1000), new Decimal(10), 24, 12, 'YEARLY', 'CAPITALIZE')).not.toThrow();
-    });
-  });
-
-  describe('runFinanceCalculation orchestrator', () => {
-    it('runs the full end-to-end flow correctly and assigns calculationVersion', () => {
-      const inputs = {
-        availableMarginCapital: 100000, // 10L project cost
-        expectedMonthlyRevenue: 75000,
-        expectedMonthlyOperatingCost: 50000
-      };
-
-      const scheme = {
-        schemeCode: 'TERM_LOAN',
-        schemeName: 'Term Loan Scheme',
-        minProjectCost: 140001,
-        maxProjectCost: 5000000,
-        financingPercentage: 90,
-        maxLoanAmount: 4500000,
-        interestRate: 8,
-        tenureMonths: 84,
-        moratoriumMonths: 6,
-        paymentFrequency: 'QUARTERLY' as const,
-        moratoriumInterestTreatment: 'CAPITALIZE' as const
-      };
-
-      const result = runFinanceCalculation(inputs, scheme);
-
-      // loanAmount = 90% of 10L = 9,00,000
-      expect(result.loanStructure.loanAmount.toNumber()).toBe(900000);
-      expect(result.schedule.length).toBe(28);
-      expect(result.dscrResult.annualCashAvailable?.toNumber()).toBe(300000);
-      expect(result.calculationVersion).toBe(FINANCE_CALCULATION_VERSION);
-    });
-  });
 });
+

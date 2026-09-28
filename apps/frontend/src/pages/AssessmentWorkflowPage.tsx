@@ -6,25 +6,31 @@ import {
   updateAssessment,
   getAssessmentInputs,
   putAssessmentInput,
-  completeAssessment,
 } from '../api/assessments';
+import {
+  calculateFinance,
+  getLatestFinance,
+  type CalculateFinanceResponse,
+} from '../api/finance';
 import { Stepper, type AssessmentStep } from '../components/Stepper';
 import { StatusBadge } from '../components/StatusBadge';
 import { Alert } from '../components/Alert';
 import { LocationSelector } from '../components/LocationSelector';
 import { CategorySelector } from '../components/CategorySelector';
+import { FinancialReportBreakdown } from '../components/FinancialReportBreakdown';
+import { SahayakQuestionnaire } from '../components/SahayakQuestionnaire';
+import { FeasibilityReportView } from '../components/FeasibilityReportView';
+import { getFeasibilityReport, type FeasibilityReportData } from '../api/questionnaire';
 import {
   ArrowLeft,
   ArrowRight,
   Save,
-  CheckCircle2,
   RefreshCw,
   Edit,
   Lightbulb,
   Coins,
   MapPin,
   Briefcase,
-  Calculator,
   AlertCircle,
 } from 'lucide-react';
 
@@ -53,6 +59,17 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
   const [basicCategoryId, setBasicCategoryId] = useState('');
   const [customCategoryText, setCustomCategoryText] = useState('');
   const [basicLanguage, setBasicLanguage] = useState<'en' | 'hi' | 'gu'>('en');
+  const [locationExtraDetails, setLocationExtraDetails] = useState<{
+    locationSelectionMethod?: 'ADMINISTRATIVE' | 'GOOGLE_MAPS';
+    formattedAddress?: string;
+    latitude?: number;
+    longitude?: number;
+    googlePlaceId?: string;
+    stateName?: string;
+    districtName?: string;
+    blockName?: string;
+    villageName?: string;
+  } | null>(null);
 
   // Step 2: Business Idea & Resources Form State
   const [businessIdea, setBusinessIdea] = useState('');
@@ -79,7 +96,11 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
   const [availableFunds, setAvailableFunds] = useState<number | ''>('');
 
   // Step 3: Financial Contribution Form State
+  const [projectCost, setProjectCost] = useState<number | ''>('');
   const [ownContribution, setOwnContribution] = useState<number | ''>('');
+  const [savedFinance, setSavedFinance] = useState<CalculateFinanceResponse | null>(null);
+  const [isCalculatingFinance, setIsCalculatingFinance] = useState(false);
+  const [feasibilityReport, setFeasibilityReport] = useState<FeasibilityReportData | null>(null);
 
   // Load all assessment data from real backend
   const loadData = useCallback(async () => {
@@ -139,6 +160,14 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
         setAvailableFunds(Number(aFunds));
       }
 
+      // Populate Project Cost
+      const pCost =
+        inputMap.get('project_cost')?.valueNumber ??
+        inputMap.get('estimated_project_cost')?.valueNumber;
+      if (pCost !== null && pCost !== undefined && pCost !== '') {
+        setProjectCost(Number(pCost));
+      }
+
       // Populate Financial Contribution (own funds to invest)
       const ownCap =
         inputMap.get('own_contribution')?.valueNumber ??
@@ -146,6 +175,83 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
         inputMap.get('available_margin_capital')?.valueNumber;
       if (ownCap !== null && ownCap !== undefined && ownCap !== '') {
         setOwnContribution(Number(ownCap));
+      }
+
+      // Load latest persisted finance run if available
+      try {
+        const fin = await getLatestFinance(assessmentId);
+        if (fin?.run) {
+          const tenure = fin.scheme?.tenureMonths || 0;
+          const mor = fin.scheme?.moratoriumMonths || 0;
+          const activeMonths = tenure - mor;
+          const activeRepayments = activeMonths > 0 ? activeMonths / 3 : 0;
+          const periodicRate = fin.scheme?.interestRate ? (Number(fin.scheme.interestRate) / 4).toFixed(4) : undefined;
+
+          setSavedFinance({
+            status: 'SUCCESS',
+            runId: fin.run.id,
+            schemeCode: fin.scheme?.schemeCode,
+            schemeName: fin.scheme?.schemeName,
+            financeResult: {
+              loanStructure: {
+                projectCost: fin.run.projectCost,
+                availableMarginCapital: fin.run.marginContribution,
+                requiredOwnContribution: fin.run.requiredOwnContribution,
+                shortfall: fin.run.shortfall,
+                baseLoanAmount: fin.run.baseLoanAmount,
+                loanAmount: fin.run.loanAmount,
+                theoretical10PercentMargin: fin.run.theoretical10PercentMargin,
+                financingPercentage: fin.run.financingPercentage,
+              },
+              annualInterestRate: fin.scheme?.interestRate ?? undefined,
+              quarterlyPeriodicRate: periodicRate,
+              totalTenureMonths: tenure,
+              moratoriumMonths: mor,
+              activeRepaymentMonths: activeMonths,
+              numberOfRepayments: activeRepayments,
+              paymentFrequency: fin.scheme?.paymentFrequency || 'QUARTERLY',
+              moratoriumInterestTreatment: fin.run.moratoriumInterestTreatment,
+              installmentAmount: fin.run.installmentAmount,
+              annualDebtService: fin.run.annualDebtService,
+              totalPrincipal: fin.run.loanAmount,
+              totalInterest: fin.run.totalInterest,
+              totalRepayment: fin.run.totalRepayment,
+              isScheduleCalculable: fin.run.isScheduleCalculable,
+              schedule: fin.schedule || [],
+              dscrResult: {
+                monthlyOperatingSurplus: fin.run.monthlyOperatingSurplus,
+                annualOperatingSurplus: fin.run.annualCashAvailable,
+                annualCashAvailable: fin.run.annualCashAvailable,
+                annualDebtService: fin.run.annualDebtService,
+                dscr: fin.run.dscr,
+              },
+              calculationVersion: fin.run.calculationVersion,
+            },
+          });
+        }
+      } catch {
+        // Finance run not yet computed
+      }
+
+      // Check if feasibility report or questionnaire is active
+      if (
+        detail.status === 'REPORT_READY' ||
+        detail.status === 'COMPLETED' ||
+        detail.aiStatus === 'READY'
+      ) {
+        try {
+          const rpt = await getFeasibilityReport(assessmentId);
+          setFeasibilityReport(rpt);
+          setCurrentStep('report');
+          setSubmissionComplete(true);
+        } catch {
+          // Report not yet generated
+        }
+      } else if (
+        detail.status === 'AI_QUESTIONING' ||
+        detail.aiStatus === 'QUESTIONING'
+      ) {
+        setCurrentStep('sahayak');
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to load assessment details');
@@ -183,6 +289,17 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
         locationId: basicLocationId,
         businessCategoryId: basicCategoryId,
         language: basicLanguage,
+        ...(locationExtraDetails && {
+          locationSelectionMethod: locationExtraDetails.locationSelectionMethod,
+          stateName: locationExtraDetails.stateName,
+          districtName: locationExtraDetails.districtName,
+          blockName: locationExtraDetails.blockName,
+          villageName: locationExtraDetails.villageName,
+          formattedAddress: locationExtraDetails.formattedAddress,
+          latitude: locationExtraDetails.latitude,
+          longitude: locationExtraDetails.longitude,
+          googlePlaceId: locationExtraDetails.googlePlaceId,
+        }),
       });
       const reloaded = await getAssessmentById(assessmentId);
       setAssessment(reloaded);
@@ -301,8 +418,19 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
     }
   };
 
-  // Step 3: Save Financial Contribution
+  // Step 3: Save Financial Contribution & Calculate Scheme
   const handleSaveFinance = async () => {
+    if (projectCost === '') {
+      setErrorMsg(t.projectCostRequired);
+      return;
+    }
+
+    const numProjectCost = Number(projectCost);
+    if (isNaN(numProjectCost) || !isFinite(numProjectCost) || numProjectCost <= 0) {
+      setErrorMsg(t.negativeProjectCostError);
+      return;
+    }
+
     if (ownContribution === '') {
       setErrorMsg(t.ownContributionRequired);
       return;
@@ -324,9 +452,22 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
     }
 
     setIsSaving(true);
+    setIsCalculatingFinance(true);
     setErrorMsg(null);
     try {
       await Promise.all([
+        putAssessmentInput(assessmentId, 'project_cost', {
+          questionText: t.projectCostTitle,
+          inputType: 'NUMBER',
+          valueNumber: numProjectCost,
+          source: 'USER',
+        }),
+        putAssessmentInput(assessmentId, 'estimated_project_cost', {
+          questionText: t.projectCostTitle,
+          inputType: 'NUMBER',
+          valueNumber: numProjectCost,
+          source: 'USER',
+        }),
         putAssessmentInput(assessmentId, 'own_contribution', {
           questionText: t.ownContributionTitle,
           inputType: 'NUMBER',
@@ -347,29 +488,36 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
         }),
       ]);
 
+      const finRes = await calculateFinance(assessmentId, {
+        project_cost: numProjectCost,
+        own_contribution: numContrib,
+        available_margin_capital: numContrib,
+        available_cash_funds: availableFunds !== '' ? Number(availableFunds) : undefined,
+      });
+
+      setSavedFinance(finRes);
       showSavedMessage(t.saved);
       setCurrentStep('review');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to save financial contribution');
+      setErrorMsg(err.message || 'Failed to save financial parameters and calculate scheme');
     } finally {
       setIsSaving(false);
+      setIsCalculatingFinance(false);
     }
   };
 
-  // Step 4: Final Submit Assessment
+  // Step 4: Final Submit Assessment -> transitions to Sahayak Questionnaire
   const handleSubmitAssessment = async () => {
     setIsSaving(true);
     setErrorMsg(null);
     try {
-      await completeAssessment(assessmentId);
+      // Reload fresh assessment details
       const reloaded = await getAssessmentById(assessmentId);
       setAssessment(reloaded);
-      setSubmissionComplete(true);
-      showSavedMessage(t.assessmentSubmittedSuccess);
-    } catch {
-      // If state machine requires specific state, still display success confirmation of saving
-      setSubmissionComplete(true);
-      showSavedMessage(t.assessmentDraftSaved);
+      setCurrentStep('sahayak');
+      showSavedMessage('Assessment inputs saved successfully. Opening Sahayak advisory questionnaire.');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to prepare questionnaire');
     } finally {
       setIsSaving(false);
     }
@@ -465,15 +613,27 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
         </div>
       </div>
 
-      {/* 4-Step Stepper Navigation */}
+      {/* Stepper Navigation */}
       <Stepper
         currentStep={currentStep}
-        onStepChange={(step) => setCurrentStep(step)}
+        onStepChange={async (step) => {
+          setCurrentStep(step);
+          if (step === 'report' && !feasibilityReport) {
+            try {
+              const rpt = await getFeasibilityReport(assessmentId);
+              setFeasibilityReport(rpt);
+            } catch {
+              // FeasibilityReportView will manage self-fetch and retry
+            }
+          }
+        }}
         completedSteps={{
           basic: Boolean(assessment.locationId && assessment.businessCategoryId),
           idea: Boolean(businessIdea.trim()),
-          finance: ownContribution !== '',
-          review: submissionComplete,
+          finance: ownContribution !== '' && projectCost !== '',
+          review: currentStep === 'sahayak' || currentStep === 'report' || submissionComplete,
+          sahayak: currentStep === 'report' || submissionComplete,
+          report: currentStep === 'report' && Boolean(feasibilityReport),
         }}
       />
 
@@ -506,7 +666,12 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
             <label className="form-label">{t.location}</label>
             <LocationSelector
               value={basicLocationId}
-              onChange={(id) => setBasicLocationId(id)}
+              onChange={(id, _locObj, extra) => {
+                setBasicLocationId(id);
+                if (extra) {
+                  setLocationExtraDetails(extra);
+                }
+              }}
               disabled={isSaving}
             />
           </div>
@@ -707,13 +872,11 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* STEP 3: FINANCIAL CONTRIBUTION */}
+      {/* STEP 3: FINANCIAL CONTRIBUTION & PROJECT COST */}
       {/* ========================================================================= */}
       {currentStep === 'finance' && (() => {
         const numOwnContrib = ownContribution === '' ? 0 : Number(ownContribution);
-        const isPositiveContribution = !isNaN(numOwnContrib) && numOwnContrib > 0;
-        const maxTheoreticalProjectCost = isPositiveContribution ? numOwnContrib / 0.10 : 0;
-        const maxTheoreticalLoanAmount = isPositiveContribution ? maxTheoreticalProjectCost - numOwnContrib : 0;
+        const numProjectCost = projectCost === '' ? 0 : Number(projectCost);
         const isContributionExceeded =
           availableFunds !== '' &&
           availableFunds !== null &&
@@ -731,17 +894,82 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
                   Step 3 of 4
                 </span>
               </div>
-              <h2 style={{ fontSize: '1.35rem', marginBottom: '6px' }}>{t.ownContributionTitle}</h2>
+              <h2 style={{ fontSize: '1.35rem', marginBottom: '6px' }}>{t.stepFinance}</h2>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
                 {t.ownContributionSubtitle}
               </p>
             </div>
 
-            {/* Own Contribution Amount Field */}
+            {/* 1. Proposed Project Cost Field */}
+            <div className="form-group" style={{ marginBottom: '24px' }}>
+              <label className="form-label" style={{ fontWeight: 600 }}>
+                {t.projectCostTitle} <span className="required">*</span>
+              </label>
+              <div className="form-helper" style={{ marginBottom: '6px' }}>
+                {t.projectCostSubtitle}
+              </div>
+              <div style={{ maxWidth: '340px', position: 'relative' }}>
+                <span
+                  style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    fontWeight: 700,
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  className="input-control"
+                  style={{ paddingLeft: '32px' }}
+                  value={projectCost}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === '') {
+                      setProjectCost('');
+                    } else {
+                      const parsed = Number(val);
+                      setProjectCost(parsed < 0 ? 0 : parsed);
+                    }
+                  }}
+                  placeholder={t.projectCostPlaceholder}
+                  min={0}
+                  disabled={isSaving}
+                  required
+                />
+              </div>
+              {numProjectCost > 5000000 && (
+                <div
+                  style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: '#dc2626',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <AlertCircle size={15} />
+                  <span>{t.notEligibleProjectCostError}</span>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Own Contribution Amount Field */}
             <div className="form-group" style={{ marginBottom: '24px' }}>
               <label className="form-label" style={{ fontWeight: 600 }}>
                 {t.ownContributionTitle} <span className="required">*</span>
               </label>
+              <div className="form-helper" style={{ marginBottom: '6px' }}>
+                {t.ownContributionSubtitle}
+              </div>
               <div style={{ maxWidth: '340px', position: 'relative' }}>
                 <span
                   style={{
@@ -814,129 +1042,15 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
               </div>
             </div>
 
-            {/* Read-Only Preliminary Financial Summary Card */}
-            <div
-              style={{
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-light)',
-                borderRadius: 'var(--radius-md)',
-                padding: '20px',
-                marginBottom: '24px',
-                boxShadow: 'var(--shadow-sm)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-                <Calculator size={18} color="var(--brand-green)" />
-                <h3 style={{ fontSize: '1.05rem', margin: 0, color: 'var(--text-main)', fontWeight: 600 }}>
-                  {t.preliminaryFinanceTitle}
-                </h3>
-              </div>
-
-              {isPositiveContribution ? (
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: '12px',
-                    marginBottom: '16px',
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: '12px 14px',
-                      background: 'var(--bg-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--border-light)',
-                    }}
-                  >
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                      {t.summaryFinance}
-                    </div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--brand-green)' }}>
-                      ₹{numOwnContrib.toLocaleString('en-IN')}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      padding: '12px 14px',
-                      background: 'var(--bg-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--border-light)',
-                    }}
-                  >
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                      {t.minAssumedContributionPercent}
-                    </div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                      10%
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      padding: '12px 14px',
-                      background: 'var(--bg-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--border-light)',
-                    }}
-                  >
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-                      {t.maxTheoreticalProjectCost}
-                    </div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                      ₹{Math.round(maxTheoreticalProjectCost).toLocaleString('en-IN')}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      padding: '12px 14px',
-                      background: 'var(--brand-green-light)',
-                      borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--brand-green-border, var(--border-light))',
-                    }}
-                  >
-                    <div style={{ fontSize: '0.8rem', color: 'var(--brand-green-dark, var(--text-secondary))', marginBottom: '4px' }}>
-                      {t.maxTheoreticalLoanAmount}
-                    </div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--brand-green)' }}>
-                      ₹{Math.round(maxTheoreticalLoanAmount).toLocaleString('en-IN')}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    padding: '12px 16px',
-                    background: 'var(--bg-subtle)',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px dashed var(--border-light)',
-                    fontSize: '0.85rem',
-                    color: 'var(--text-secondary)',
-                    marginBottom: '14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  <AlertCircle size={16} color="var(--text-muted)" />
-                  <span>{t.zeroContributionNotice}</span>
-                </div>
-              )}
-
-              {/* Disclaimer */}
-              <div
-                style={{
-                  fontSize: '0.78rem',
-                  color: 'var(--text-muted)',
-                  lineHeight: 1.45,
-                  borderTop: '1px solid var(--border-light)',
-                  paddingTop: '10px',
-                }}
-              >
-                <strong>*</strong> {t.preliminaryFinanceDisclaimer}
-              </div>
+            {/* 6-Section Authoritative Financial Feasibility Engine */}
+            <div style={{ marginTop: '24px' }}>
+              <FinancialReportBreakdown
+                financeData={savedFinance}
+                isLoading={isCalculatingFinance}
+                userEnteredProjectCost={projectCost}
+                userEnteredOwnContribution={ownContribution}
+                availableFunds={availableFunds}
+              />
             </div>
 
             <div
@@ -962,7 +1076,7 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
                 type="button"
                 className="btn btn-primary"
                 onClick={handleSaveFinance}
-                disabled={isSaving || ownContribution === '' || isContributionExceeded}
+                disabled={isSaving || ownContribution === '' || projectCost === '' || isContributionExceeded || numProjectCost > 5000000}
               >
                 <Save size={16} />
                 <span>{isSaving ? t.saving : t.next}</span>
@@ -1075,181 +1189,69 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
               )}
             </div>
 
-            {/* 4. Financial Contribution Summary */}
-            {(() => {
-              const numOwnContrib = ownContribution === '' ? 0 : Number(ownContribution);
-              const isPositiveContribution = !isNaN(numOwnContrib) && numOwnContrib > 0;
-              const maxTheoreticalProjectCost = isPositiveContribution ? numOwnContrib / 0.10 : 0;
-              const maxTheoreticalLoanAmount = isPositiveContribution ? maxTheoreticalProjectCost - numOwnContrib : 0;
+            {/* 4. Financial Feasibility & Scheme Report */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h4 style={{ margin: 0, color: 'var(--brand-green)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Coins size={16} />
+                  <span>{t.summaryFinance}</span>
+                </h4>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setCurrentStep('finance')}
+                >
+                  <Edit size={12} />
+                  <span>{t.edit}</span>
+                </button>
+              </div>
 
-              return (
-                <div style={{ background: 'var(--bg-subtle)', padding: '18px', borderRadius: 'var(--radius-md)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <h4 style={{ margin: 0, color: 'var(--brand-green)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Coins size={16} />
-                      <span>{t.summaryFinance}</span>
-                    </h4>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => setCurrentStep('finance')}
-                    >
-                      <Edit size={12} />
-                      <span>{t.edit}</span>
-                    </button>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                      gap: '12px',
-                      fontSize: '0.9rem',
-                      marginBottom: '12px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        padding: '10px 12px',
-                        background: 'var(--bg-surface)',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--border-light)',
-                      }}
-                    >
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                        {t.summaryFinance}
-                      </div>
-                      <div style={{ fontWeight: 700, color: 'var(--brand-green)', fontSize: '1.05rem' }}>
-                        ₹{numOwnContrib.toLocaleString('en-IN')}
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        padding: '10px 12px',
-                        background: 'var(--bg-surface)',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--border-light)',
-                      }}
-                    >
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                        {t.minAssumedContributionPercent}
-                      </div>
-                      <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '1.05rem' }}>
-                        10%
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        padding: '10px 12px',
-                        background: 'var(--bg-surface)',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--border-light)',
-                      }}
-                    >
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '2px' }}>
-                        {t.maxTheoreticalProjectCost}
-                      </div>
-                      <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '1.05rem' }}>
-                        {isPositiveContribution
-                          ? `₹${Math.round(maxTheoreticalProjectCost).toLocaleString('en-IN')}`
-                          : '—'}
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        padding: '10px 12px',
-                        background: 'var(--brand-green-light)',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--brand-green-border, var(--border-light))',
-                      }}
-                    >
-                      <div style={{ fontSize: '0.8rem', color: 'var(--brand-green-dark, var(--text-secondary))', marginBottom: '2px' }}>
-                        {t.maxTheoreticalLoanAmount}
-                      </div>
-                      <div style={{ fontWeight: 700, color: 'var(--brand-green)', fontSize: '1.05rem' }}>
-                        {isPositiveContribution
-                          ? `₹${Math.round(maxTheoreticalLoanAmount).toLocaleString('en-IN')}`
-                          : '—'}
-                      </div>
-                    </div>
-                  </div>
-
-                  {!isPositiveContribution && (
-                    <div
-                      style={{
-                        fontSize: '0.82rem',
-                        color: 'var(--text-secondary)',
-                        marginBottom: '8px',
-                        padding: '8px 12px',
-                        background: 'var(--bg-surface)',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px dashed var(--border-light)',
-                      }}
-                    >
-                      {t.zeroContributionNotice}
-                    </div>
-                  )}
-
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                    <strong>*</strong> {t.preliminaryFinanceDisclaimer}
-                  </div>
-                </div>
-              );
-            })()}
+              <FinancialReportBreakdown
+                financeData={savedFinance}
+                userEnteredProjectCost={projectCost}
+                userEnteredOwnContribution={ownContribution}
+                availableFunds={availableFunds}
+              />
+            </div>
           </div>
 
-          {/* Submission Action */}
+          {/* Submission Action to Sahayak Questionnaire */}
           <div
             style={{
-              background: submissionComplete ? 'var(--brand-green-light)' : 'var(--bg-page)',
-              border: `1px solid ${submissionComplete ? 'var(--brand-green-border)' : 'var(--border-light)'}`,
+              background: 'linear-gradient(135deg, rgba(30, 77, 43, 0.05) 0%, rgba(200, 90, 23, 0.05) 100%)',
+              border: '1px solid var(--border-light)',
               padding: '24px',
               borderRadius: 'var(--radius-lg)',
               textAlign: 'center',
             }}
           >
-            {submissionComplete ? (
-              <div>
-                <CheckCircle2 size={40} color="var(--brand-green)" style={{ margin: '0 auto 12px' }} />
-                <h3 style={{ color: 'var(--brand-green)', marginBottom: '8px' }}>
-                  {t.assessmentSubmittedSuccess}
-                </h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '16px' }}>
-                  {t.status}: {assessment.status}
-                </p>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => onNavigate('assessments')}
-                >
-                  {t.backToAssessments}
-                </button>
-              </div>
-            ) : (
-              <div>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-lg"
-                  onClick={handleSubmitAssessment}
-                  disabled={isSaving}
-                >
-                  {isSaving ? (
-                    <>
-                      <div className="spinner" />
-                      <span>{t.submittingAssessment}</span>
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 size={20} />
-                      <span>{t.submitAssessmentBtn}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
+            <h3 style={{ color: 'var(--brand-green)', marginBottom: '8px', fontSize: '1.2rem' }}>
+              {t.submitAssessmentBtn || 'Submit Feasibility Assessment'}
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '18px', maxWidth: '540px', margin: '0 auto 18px' }}>
+              Your financial estimates and scheme eligibility are ready. Click below to proceed to Sahayak, where we will ask 6 quick questions about your local business environment before generating the final report.
+            </p>
+            <div>
+              <button
+                type="button"
+                className="btn btn-primary btn-lg"
+                onClick={handleSubmitAssessment}
+                disabled={isSaving}
+                style={{ padding: '12px 28px', fontSize: '1rem', fontWeight: 600 }}
+              >
+                {isSaving ? (
+                  <>
+                    <div className="spinner" />
+                    <span>{t.saving || 'Saving...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <ArrowRight size={18} />
+                    <span>Proceed to Sahayak Advisory (6 Questions)</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           <div
@@ -1273,6 +1275,37 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* STEP 5: SAHAYAK BUSINESS CONTEXT QUESTIONNAIRE (6 QUESTIONS)             */}
+      {/* ========================================================================= */}
+      {currentStep === 'sahayak' && (
+        <SahayakQuestionnaire
+          assessmentId={assessmentId}
+          onComplete={(report) => {
+            if (report) {
+              setFeasibilityReport(report);
+            }
+            setSubmissionComplete(true);
+            setCurrentStep('report');
+            showSavedMessage('Sahayak questionnaire completed! Feasibility report generated successfully.');
+          }}
+          onSaveAndExit={() => onNavigate('dashboard')}
+          onBackToAssessment={() => setCurrentStep('review')}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* STEP 6: COMPREHENSIVE FEASIBILITY REPORT                                 */}
+      {/* ========================================================================= */}
+      {currentStep === 'report' && (
+        <FeasibilityReportView
+          assessmentId={assessmentId}
+          report={feasibilityReport}
+          onNavigate={onNavigate}
+        />
+      )}
     </div>
   );
 };
+

@@ -2,5 +2,6 @@ packages:
   - 'apps/*'
 
 allowBuilds:
+  core-js: set this to true or false
   es5-ext: true
   esbuild: true

@@ -8,11 +8,32 @@ import {
   getLocationById,
 } from '../api/locations';
 import { useLanguage } from '../context/LanguageContext';
-import { MapPin, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { GoogleMapsLocationPicker } from './GoogleMapsLocationPicker';
+import {
+  CheckCircle2,
+  AlertCircle,
+  RefreshCw,
+  Compass,
+  Layers,
+} from 'lucide-react';
 
 interface LocationSelectorProps {
   value: string;
-  onChange: (locationId: string, locationObj?: LocationItem) => void;
+  onChange: (
+    locationId: string,
+    locationObj?: LocationItem,
+    extraDetails?: {
+      locationSelectionMethod?: 'ADMINISTRATIVE' | 'GOOGLE_MAPS';
+      formattedAddress?: string;
+      latitude?: number;
+      longitude?: number;
+      googlePlaceId?: string;
+      stateName?: string;
+      districtName?: string;
+      blockName?: string;
+      villageName?: string;
+    }
+  ) => void;
   disabled?: boolean;
 }
 
@@ -22,6 +43,9 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
   disabled = false,
 }) => {
   const { t } = useLanguage();
+
+  // Mode Selection: 'ADMINISTRATIVE' or 'GOOGLE_MAPS'
+  const [selectionMode, setSelectionMode] = useState<'ADMINISTRATIVE' | 'GOOGLE_MAPS'>('ADMINISTRATIVE');
 
   // Dropdown options
   const [states, setStates] = useState<LocationItem[]>([]);
@@ -55,28 +79,25 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
   const blockReqSeq = useRef(0);
   const villageReqSeq = useRef(0);
 
-  // Load States on mount
-  useEffect(() => {
-    let mounted = true;
+  // Load States on mount or retry
+  const loadStatesList = () => {
     setIsLoadingStates(true);
     setLocationError(null);
 
     getStates()
       .then((data) => {
-        if (!mounted) return;
         setStates(data || []);
       })
       .catch((err) => {
-        if (!mounted) return;
         setLocationError(err.message || 'Failed to load states');
       })
       .finally(() => {
-        if (mounted) setIsLoadingStates(false);
+        setIsLoadingStates(false);
       });
+  };
 
-    return () => {
-      mounted = false;
-    };
+  useEffect(() => {
+    loadStatesList();
   }, []);
 
   // Pre-populate dropdowns if an existing location ID is supplied
@@ -162,27 +183,33 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     setLocationError(null);
 
     if (!stateId) {
-      onChange('');
       setSelectedHierarchyText('');
+      onChange('');
       return;
     }
 
     const stateObj = states.find((s) => s.id === stateId);
-    onChange(stateId, stateObj);
-    setSelectedHierarchyText(stateObj?.name || '');
+    if (stateObj) {
+      setSelectedHierarchyText(stateObj.name);
+      onChange(stateObj.id, stateObj, {
+        locationSelectionMethod: 'ADMINISTRATIVE',
+        stateName: stateObj.name,
+      });
+    }
 
-    const currentSeq = ++districtReqSeq.current;
+    const seq = ++districtReqSeq.current;
     setIsLoadingDistricts(true);
-
     try {
       const data = await getDistricts(stateId);
-      if (currentSeq !== districtReqSeq.current) return; // Discard stale response
-      setDistricts(data || []);
+      if (seq === districtReqSeq.current) {
+        setDistricts(data || []);
+      }
     } catch (err: any) {
-      if (currentSeq !== districtReqSeq.current) return;
-      setLocationError(err.message || 'Failed to load districts');
+      if (seq === districtReqSeq.current) {
+        setLocationError(err.message || 'Failed to load districts');
+      }
     } finally {
-      if (currentSeq === districtReqSeq.current) {
+      if (seq === districtReqSeq.current) {
         setIsLoadingDistricts(false);
       }
     }
@@ -199,29 +226,41 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     setLocationError(null);
 
     const stateObj = states.find((s) => s.id === selectedStateId);
+    const districtObj = districts.find((d) => d.id === districtId);
 
     if (!districtId) {
-      onChange(selectedStateId, stateObj);
-      setSelectedHierarchyText(stateObj?.name || '');
+      if (stateObj) {
+        setSelectedHierarchyText(stateObj.name);
+        onChange(stateObj.id, stateObj, {
+          locationSelectionMethod: 'ADMINISTRATIVE',
+          stateName: stateObj.name,
+        });
+      }
       return;
     }
 
-    const distObj = districts.find((d) => d.id === districtId);
-    onChange(districtId, distObj);
-    setSelectedHierarchyText([distObj?.name, stateObj?.name].filter(Boolean).join(' → '));
+    if (districtObj && stateObj) {
+      setSelectedHierarchyText(`${districtObj.name}, ${stateObj.name}`);
+      onChange(districtObj.id, districtObj, {
+        locationSelectionMethod: 'ADMINISTRATIVE',
+        stateName: stateObj.name,
+        districtName: districtObj.name,
+      });
+    }
 
-    const currentSeq = ++blockReqSeq.current;
+    const seq = ++blockReqSeq.current;
     setIsLoadingBlocks(true);
-
     try {
       const data = await getBlocks(districtId);
-      if (currentSeq !== blockReqSeq.current) return; // Discard stale response
-      setBlocks(data || []);
+      if (seq === blockReqSeq.current) {
+        setBlocks(data || []);
+      }
     } catch (err: any) {
-      if (currentSeq !== blockReqSeq.current) return;
-      setLocationError(err.message || 'Failed to load blocks');
+      if (seq === blockReqSeq.current) {
+        setLocationError(err.message || 'Failed to load talukas/blocks');
+      }
     } finally {
-      if (currentSeq === blockReqSeq.current) {
+      if (seq === blockReqSeq.current) {
         setIsLoadingBlocks(false);
       }
     }
@@ -235,232 +274,321 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
     setHasNoVillages(false);
     setLocationError(null);
 
-    const distObj = districts.find((d) => d.id === selectedDistrictId);
     const stateObj = states.find((s) => s.id === selectedStateId);
+    const districtObj = districts.find((d) => d.id === selectedDistrictId);
+    const blockObj = blocks.find((b) => b.id === blockId);
 
     if (!blockId) {
-      onChange(selectedDistrictId, distObj);
-      setSelectedHierarchyText([distObj?.name, stateObj?.name].filter(Boolean).join(' → '));
+      if (districtObj && stateObj) {
+        setSelectedHierarchyText(`${districtObj.name}, ${stateObj.name}`);
+        onChange(districtObj.id, districtObj, {
+          locationSelectionMethod: 'ADMINISTRATIVE',
+          stateName: stateObj.name,
+          districtName: districtObj.name,
+        });
+      }
       return;
     }
 
-    const blockObj = blocks.find((b) => b.id === blockId);
-    onChange(blockId, blockObj);
-    setSelectedHierarchyText([blockObj?.name, distObj?.name, stateObj?.name].filter(Boolean).join(' → '));
+    if (blockObj && districtObj && stateObj) {
+      setSelectedHierarchyText(`${blockObj.name} → ${districtObj.name}, ${stateObj.name}`);
+      onChange(blockObj.id, blockObj, {
+        locationSelectionMethod: 'ADMINISTRATIVE',
+        stateName: stateObj.name,
+        districtName: districtObj.name,
+        blockName: blockObj.name,
+      });
+    }
 
-    const currentSeq = ++villageReqSeq.current;
+    const seq = ++villageReqSeq.current;
     setIsLoadingVillages(true);
-
     try {
       const data = await getVillages(blockId);
-      if (currentSeq !== villageReqSeq.current) return; // Discard stale response
-      if (data && data.length > 0) {
-        setVillages(data);
-        setHasNoVillages(false);
-      } else {
-        setVillages([]);
-        setHasNoVillages(true);
+      if (seq === villageReqSeq.current) {
+        setVillages(data || []);
+        setHasNoVillages(!data || data.length === 0);
       }
     } catch (err: any) {
-      if (currentSeq !== villageReqSeq.current) return;
-      setLocationError(err.message || 'Failed to load villages');
+      if (seq === villageReqSeq.current) {
+        setLocationError(err.message || 'Failed to load villages');
+      }
     } finally {
-      if (currentSeq === villageReqSeq.current) {
+      if (seq === villageReqSeq.current) {
         setIsLoadingVillages(false);
       }
     }
   };
 
   // Handle Village selection
-  const handleVillageChange = async (villageId: string) => {
+  const handleVillageChange = (villageId: string) => {
     setSelectedVillageId(villageId);
-    const blockObj = blocks.find((b) => b.id === selectedBlockId);
-    const distObj = districts.find((d) => d.id === selectedDistrictId);
+
     const stateObj = states.find((s) => s.id === selectedStateId);
+    const districtObj = districts.find((d) => d.id === selectedDistrictId);
+    const blockObj = blocks.find((b) => b.id === selectedBlockId);
+    const villageObj = villages.find((v) => v.id === villageId);
 
     if (!villageId) {
-      onChange(selectedBlockId, blockObj);
-      setSelectedHierarchyText([blockObj?.name, distObj?.name, stateObj?.name].filter(Boolean).join(' → '));
+      if (blockObj && districtObj && stateObj) {
+        setSelectedHierarchyText(`${blockObj.name} → ${districtObj.name}, ${stateObj.name}`);
+        onChange(blockObj.id, blockObj, {
+          locationSelectionMethod: 'ADMINISTRATIVE',
+          stateName: stateObj.name,
+          districtName: districtObj.name,
+          blockName: blockObj.name,
+        });
+      }
       return;
     }
 
-    const villageObj = villages.find((v) => v.id === villageId);
-    onChange(villageId, villageObj);
-    setSelectedHierarchyText(
-      [villageObj?.name, blockObj?.name, distObj?.name, stateObj?.name].filter(Boolean).join(' → ')
-    );
+    if (villageObj && blockObj && districtObj && stateObj) {
+      setSelectedHierarchyText(
+        `${villageObj.name} → ${blockObj.name} → ${districtObj.name}, ${stateObj.name}`
+      );
+      onChange(villageObj.id, villageObj, {
+        locationSelectionMethod: 'ADMINISTRATIVE',
+        stateName: stateObj.name,
+        districtName: districtObj.name,
+        blockName: blockObj.name,
+        villageName: villageObj.name,
+        latitude: villageObj.latitude ? Number(villageObj.latitude) : undefined,
+        longitude: villageObj.longitude ? Number(villageObj.longitude) : undefined,
+      });
+    }
   };
 
   return (
-    <div className="location-selector-box">
-      {locationError && (
-        <div
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Top Method Switcher: Administrative vs Google Maps */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '8px',
+          background: 'var(--bg-subtle)',
+          padding: '4px',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-light)',
+          width: 'fit-content',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setSelectionMode('ADMINISTRATIVE')}
+          disabled={disabled}
           style={{
+            padding: '8px 16px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            background: selectionMode === 'ADMINISTRATIVE' ? 'var(--brand-green)' : 'transparent',
+            color: selectionMode === 'ADMINISTRATIVE' ? '#ffffff' : 'var(--text-secondary)',
+            fontWeight: selectionMode === 'ADMINISTRATIVE' ? 700 : 500,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            background: '#fef2f2',
-            color: '#dc2626',
-            padding: '10px 14px',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '0.85rem',
-            marginBottom: '14px',
-            border: '1px solid #fecaca',
+            gap: '6px',
+            transition: 'all 0.15s ease',
           }}
         >
-          <AlertCircle size={16} />
-          <span>{locationError}</span>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => {
-              if (!selectedStateId) {
-                getStates().then(setStates);
-              } else if (!selectedDistrictId) {
-                handleStateChange(selectedStateId);
-              } else if (!selectedBlockId) {
-                handleDistrictChange(selectedDistrictId);
-              } else {
-                handleBlockChange(selectedBlockId);
-              }
-            }}
-            style={{ marginLeft: 'auto', padding: '2px 8px', fontSize: '0.75rem' }}
-          >
-            <RefreshCw size={12} />
-            <span>{t.refresh}</span>
-          </button>
-        </div>
-      )}
+          <Layers size={15} />
+          <span>Administrative Hierarchy</span>
+        </button>
 
-      {/* Cascading Dropdowns */}
-      <div className="grid-2">
-        {/* State */}
-        <div className="form-group">
-          <label className="form-label">
-            {t.state} <span className="required">*</span>
-          </label>
-          <select
-            className="select-control"
-            value={selectedStateId}
-            onChange={(e) => handleStateChange(e.target.value)}
-            disabled={disabled || isLoadingStates}
-          >
-            <option value="">{isLoadingStates ? t.loading : t.selectState}</option>
-            {states.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <button
+          type="button"
+          onClick={() => setSelectionMode('GOOGLE_MAPS')}
+          disabled={disabled}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            background: selectionMode === 'GOOGLE_MAPS' ? 'var(--brand-green)' : 'transparent',
+            color: selectionMode === 'GOOGLE_MAPS' ? '#ffffff' : 'var(--text-secondary)',
+            fontWeight: selectionMode === 'GOOGLE_MAPS' ? 700 : 500,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            transition: 'all 0.15s ease',
+          }}
+        >
+          <Compass size={15} />
+          <span>Select on Google Maps</span>
+        </button>
+      </div>
 
-        {/* District */}
-        <div className="form-group">
-          <label className="form-label">
-            {t.district} <span className="required">*</span>
-          </label>
-          <select
-            className="select-control"
-            value={selectedDistrictId}
-            onChange={(e) => handleDistrictChange(e.target.value)}
-            disabled={disabled || !selectedStateId || isLoadingDistricts}
-          >
-            <option value="">
-              {isLoadingDistricts ? `${t.loading}...` : t.selectDistrict}
-            </option>
-            {districts.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Block / Taluka */}
-        <div className="form-group">
-          <label className="form-label">{t.block}</label>
-          <select
-            className="select-control"
-            value={selectedBlockId}
-            onChange={(e) => handleBlockChange(e.target.value)}
-            disabled={disabled || !selectedDistrictId || isLoadingBlocks}
-          >
-            <option value="">
-              {isLoadingBlocks ? `${t.loading}...` : t.selectBlock}
-            </option>
-            {blocks.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Village / Town */}
-        <div className="form-group">
-          <label className="form-label">{t.village}</label>
-          <select
-            className="select-control"
-            value={selectedVillageId}
-            onChange={(e) => handleVillageChange(e.target.value)}
-            disabled={disabled || !selectedBlockId || isLoadingVillages || hasNoVillages}
-          >
-            <option value="">
-              {isLoadingVillages
-                ? `${t.loading}...`
-                : hasNoVillages
-                ? t.noVillagesAvailable
-                : t.selectVillage}
-            </option>
-            {villages.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
-
-          {hasNoVillages && selectedBlockId && !isLoadingVillages && (
+      {/* OPTION 1: ADMINISTRATIVE DROPDOWNS */}
+      {selectionMode === 'ADMINISTRATIVE' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {locationError && (
             <div
               style={{
-                fontSize: '0.78rem',
-                color: 'var(--text-muted)',
-                marginTop: '4px',
+                padding: '10px 14px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: 'var(--radius-sm)',
+                color: '#dc2626',
+                fontSize: '0.88rem',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
+                justifyContent: 'space-between',
               }}
             >
-              <span>{t.savedAtBlockLevel}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertCircle size={16} />
+                <span>{locationError}</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={loadStatesList}
+                style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+              >
+                <RefreshCw size={12} />
+                <span>Retry</span>
+              </button>
+            </div>
+          )}
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '16px',
+            }}
+          >
+            {/* 1. State Selector */}
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>{t.state || 'State / UT'} <span style={{ color: 'var(--brand-red)' }}>*</span></span>
+                {isLoadingStates && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Loading...</span>}
+              </label>
+              <select
+                className="select-control"
+                value={selectedStateId}
+                onChange={(e) => handleStateChange(e.target.value)}
+                disabled={disabled || isLoadingStates}
+              >
+                <option value="">-- Select State / UT --</option>
+                {states.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} {s.stateCode ? `(${s.stateCode})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. District Selector */}
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>{t.district || 'District / City'} <span style={{ color: 'var(--brand-red)' }}>*</span></span>
+                {isLoadingDistricts && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Loading...</span>}
+              </label>
+              <select
+                className="select-control"
+                value={selectedDistrictId}
+                onChange={(e) => handleDistrictChange(e.target.value)}
+                disabled={disabled || !selectedStateId || isLoadingDistricts}
+              >
+                <option value="">
+                  {!selectedStateId ? 'First select State' : '-- Select District / City --'}
+                </option>
+                {districts.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 3. Block / Taluka Selector */}
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>{t.block || 'Taluka / Block / Sub-District'}</span>
+                {isLoadingBlocks && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Loading...</span>}
+              </label>
+              <select
+                className="select-control"
+                value={selectedBlockId}
+                onChange={(e) => handleBlockChange(e.target.value)}
+                disabled={disabled || !selectedDistrictId || isLoadingBlocks}
+              >
+                <option value="">
+                  {!selectedDistrictId ? 'First select District' : '-- Select Taluka / Block --'}
+                </option>
+                {blocks.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 4. Village / Town Selector */}
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>{t.village || 'Village / Town / Locality'}</span>
+                {isLoadingVillages && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Loading...</span>}
+              </label>
+              <select
+                className="select-control"
+                value={selectedVillageId}
+                onChange={(e) => handleVillageChange(e.target.value)}
+                disabled={disabled || !selectedBlockId || isLoadingVillages || hasNoVillages}
+              >
+                <option value="">
+                  {!selectedBlockId
+                    ? 'First select Taluka/Block'
+                    : hasNoVillages
+                    ? 'No specific village listed (taluka selected)'
+                    : '-- Select Village / Town --'}
+                </option>
+                {villages.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Selected Administrative Summary Pill */}
+          {selectedHierarchyText && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 14px',
+                background: 'var(--bg-subtle)',
+                border: '1px solid var(--border-light)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '0.88rem',
+                color: 'var(--text-main)',
+              }}
+            >
+              <CheckCircle2 size={16} color="var(--brand-green)" />
+              <span><strong>Selected Location:</strong> {selectedHierarchyText}</span>
             </div>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Selected Location Summary Indicator */}
-      {selectedHierarchyText && (
-        <div
-          style={{
-            marginTop: '12px',
-            padding: '10px 14px',
-            background: 'var(--brand-green-light)',
-            border: '1px solid var(--brand-green-border)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: '0.85rem',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            color: 'var(--text-main)',
+      {/* OPTION 2: GOOGLE MAPS LOCATION PICKER */}
+      {selectionMode === 'GOOGLE_MAPS' && (
+        <GoogleMapsLocationPicker
+          onLocationConfirmed={(locId, locObj, extraDetails) => {
+            setSelectedHierarchyText(extraDetails?.formattedAddress || locObj.name);
+            onChange(locId, locObj, {
+              ...extraDetails,
+              locationSelectionMethod: 'GOOGLE_MAPS',
+            });
           }}
-        >
-          <MapPin size={16} color="var(--brand-green)" style={{ flexShrink: 0 }} />
-          <span>
-            <strong>{t.selectedLocationText}</strong> {selectedHierarchyText}
-          </span>
-          <CheckCircle2 size={16} color="var(--brand-green)" style={{ marginLeft: 'auto', flexShrink: 0 }} />
-        </div>
+          onSwitchToAdministrative={() => setSelectionMode('ADMINISTRATIVE')}
+          disabled={disabled}
+        />
       )}
     </div>
   );
 };
-
-
