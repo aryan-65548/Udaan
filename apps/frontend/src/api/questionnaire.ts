@@ -181,6 +181,15 @@ export interface FeasibilityReportData {
     salesChannels: string;
     businessChallenges: string;
     supportRequired: string;
+    actionableRecommendations?: Array<{
+      facilityKey: string;
+      facilityName: string;
+      rating: string;
+      ratingLabel: string;
+      impact: string;
+      recommendations: string[];
+      priority: 'HIGH' | 'MEDIUM' | 'LOW';
+    }>;
   };
 
   // Section 9: Support Organizations

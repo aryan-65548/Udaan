@@ -607,9 +607,17 @@ const QuestionInfrastructure: React.FC<{
 /* ========================================================================= */
 /* QUESTION 2 COMPONENT: NEARBY COMPETITORS */
 /* ========================================================================= */
+interface CompetitorItem {
+  name: string;
+  distance?: string;
+  distanceValue?: number | null;
+  distanceUnit?: 'm' | 'km';
+  description?: string;
+}
+
 const QuestionCompetitors: React.FC<{
   options: any;
-  value: { hasNoCompetitors?: boolean; competitors?: Array<{ name: string; distance?: string; description?: string }> };
+  value: { hasNoCompetitors?: boolean; competitors?: CompetitorItem[] };
   onChange: (val: any) => void;
 }> = ({ options, value, onChange }) => {
   const hasNo = Boolean(value.hasNoCompetitors);
@@ -619,20 +627,36 @@ const QuestionCompetitors: React.FC<{
     if (!hasNo) {
       onChange({ hasNoCompetitors: true, competitors: [] });
     } else {
-      onChange({ hasNoCompetitors: false, competitors: [{ name: '', distance: '', description: '' }] });
+      onChange({
+        hasNoCompetitors: false,
+        competitors: [{ name: '', distanceValue: 500, distanceUnit: 'm', distance: '500 m', description: '' }],
+      });
     }
   };
 
   const handleAddCompetitor = () => {
     onChange({
       hasNoCompetitors: false,
-      competitors: [...list, { name: '', distance: '', description: '' }],
+      competitors: [...list, { name: '', distanceValue: null, distanceUnit: 'm', distance: '', description: '' }],
     });
   };
 
-  const handleUpdateCompetitor = (idx: number, field: string, val: string) => {
+  const handleUpdateCompetitor = (idx: number, field: string, val: any) => {
     const updated = [...list];
-    updated[idx] = { ...updated[idx], [field]: val };
+    const item = { ...updated[idx], [field]: val };
+
+    // Synchronize distance string with numeric value and unit
+    if (field === 'distanceValue' || field === 'distanceUnit') {
+      const dVal = field === 'distanceValue' ? val : (item.distanceValue ?? null);
+      const dUnit = field === 'distanceUnit' ? val : (item.distanceUnit || 'm');
+      if (dVal !== '' && dVal !== null && dVal !== undefined && !isNaN(dVal)) {
+        item.distance = `${dVal} ${dUnit}`;
+      } else {
+        item.distance = '';
+      }
+    }
+
+    updated[idx] = item;
     onChange({ ...value, competitors: updated });
   };
 
@@ -678,82 +702,107 @@ const QuestionCompetitors: React.FC<{
       {!hasNo && (
         <div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '16px' }}>
-            {list.map((comp, idx) => (
-              <div
-                key={idx}
-                style={{
-                  background: 'var(--bg-subtle)',
-                  border: '1px solid var(--border-light)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '16px',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                  <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--brand-green)' }}>
-                    Competitor #{idx + 1}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveCompetitor(idx)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#dc2626',
-                      cursor: 'pointer',
-                      padding: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      fontSize: '0.8rem',
-                    }}
-                  >
-                    <Trash2 size={14} />
-                    <span>Remove</span>
-                  </button>
-                </div>
+            {list.map((comp, idx) => {
+              const currentUnit = comp.distanceUnit || (comp.distance?.toLowerCase().includes('km') ? 'km' : 'm');
+              const currentVal =
+                comp.distanceValue !== undefined && comp.distanceValue !== null
+                  ? comp.distanceValue
+                  : (comp.distance ? parseFloat(comp.distance) || '' : '');
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    background: 'var(--bg-subtle)',
+                    border: '1px solid var(--border-light)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '16px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--brand-green)' }}>
+                      Competitor #{idx + 1}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCompetitor(idx)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#dc2626',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                    <div>
+                      <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                        Competitor Name / Business Type <span style={{ color: '#dc2626' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        className="input-control"
+                        value={comp.name}
+                        onChange={(e) => handleUpdateCompetitor(idx, 'name', e.target.value)}
+                        placeholder="e.g. Ramesh General Store, Local Kirana"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                        Approximate Distance
+                      </label>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          className="input-control"
+                          style={{ flex: 1 }}
+                          value={currentVal}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? null : Math.max(0, parseFloat(e.target.value) || 0);
+                            handleUpdateCompetitor(idx, 'distanceValue', val);
+                          }}
+                          placeholder="e.g. 500 or 2"
+                        />
+                        <select
+                          className="select-control"
+                          style={{ width: '80px', padding: '8px 10px', background: 'var(--bg-surface)' }}
+                          value={currentUnit}
+                          onChange={(e) => handleUpdateCompetitor(idx, 'distanceUnit', e.target.value as 'm' | 'km')}
+                        >
+                          <option value="m">m (meters)</option>
+                          <option value="km">km</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                      Competitor Name / Business Type <span style={{ color: '#dc2626' }}>*</span>
+                      Short Description / Key Offerings (Optional)
                     </label>
                     <input
                       type="text"
                       className="input-control"
-                      value={comp.name}
-                      onChange={(e) => handleUpdateCompetitor(idx, 'name', e.target.value)}
-                      placeholder="e.g. Ramesh General Store, Local Carpenter"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                      Approximate Distance / Location
-                    </label>
-                    <input
-                      type="text"
-                      className="input-control"
-                      value={comp.distance || ''}
-                      onChange={(e) => handleUpdateCompetitor(idx, 'distance', e.target.value)}
-                      placeholder="e.g. 500 meters, Next Village, Main Chowk"
+                      value={comp.description || ''}
+                      onChange={(e) => handleUpdateCompetitor(idx, 'description', e.target.value)}
+                      placeholder="e.g. Sells packaged snacks; open only in evenings"
                     />
                   </div>
                 </div>
-
-                <div>
-                  <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
-                    Short Description / Key Offerings (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    className="input-control"
-                    value={comp.description || ''}
-                    onChange={(e) => handleUpdateCompetitor(idx, 'description', e.target.value)}
-                    placeholder="e.g. Sells packaged snacks; open only in evenings"
-                  />
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <button

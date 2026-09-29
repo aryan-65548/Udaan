@@ -257,22 +257,23 @@ describe('Sahayak Questionnaire & Feasibility Report Integration Tests', () => {
     expect(reportRes.status).toBe(200);
     const report = reportRes.body.data;
 
-    // 1. Assessment Identity
-    expect(report.assessment.id).toBe(assessmentId);
+    // 1. Assessment Identity & Metadata
+    expect(report.metadata).toBeDefined();
+    expect(report.metadata.assessmentId).toBe(assessmentId);
 
     // 2. Financial Feasibility Engine Results
     expect(report.financialFeasibility).toBeDefined();
-    expect(report.financialFeasibility.scheme.schemeCode).toBe('MICRO_FINANCE');
-    expect(Number(report.financialFeasibility.run.projectCost)).toBe(100000);
-    expect(Number(report.financialFeasibility.run.loanAmount)).toBe(90000);
-    expect(report.financialFeasibility.schedule.length).toBe(12);
+    expect(report.financialFeasibility.projectCost).toBe(100000);
+    expect(report.financialFeasibility.baseLoanAmount).toBe(85000);
+    expect(report.financialFeasibility.schemeName).toBeDefined();
 
-    // 3. Sahayak Business Context Insights
-    expect(report.sahayakBusinessContext).toBeDefined();
-    expect(report.sahayakBusinessContext.isComplete).toBe(true);
-    expect(report.sahayakBusinessContext.completedCount).toBe(6);
-    expect(report.sahayakBusinessContext.insights.infrastructureReadiness).toBeDefined();
-    expect(report.sahayakBusinessContext.insights.competitionLandscape).toContain('First-mover advantage');
-    expect(report.sahayakBusinessContext.insights.marketDemandOutlook).toContain('HIGH');
+    // 3. Sahayak Business Context & Infrastructure Insights
+    expect(report.infrastructureAssessment).toBeDefined();
+    expect(report.infrastructureAssessment.roadTransport).toBe('GOOD');
+    expect(report.infrastructureAssessment.actionableRecommendations).toBeDefined();
+    expect(report.infrastructureAssessment.actionableRecommendations.length).toBe(4);
+    expect(report.supportOrganizations).toBeDefined();
+    expect(report.curatedVideos).toBeDefined();
+    expect(report.actionPlan).toBeDefined();
   });
 });

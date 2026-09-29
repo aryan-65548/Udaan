@@ -1,8 +1,9 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { FeasibilityReportData } from '../api/questionnaire';
+import { formatLabel, formatTagsList } from './formatters';
 
-export function generateFeasibilityReportPdf(report: FeasibilityReportData): void {
+export function generateFeasibilityReportPdf(report: FeasibilityReportData, lang: 'en' | 'hi' | 'gu' = 'en'): void {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -24,7 +25,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
   const bgLight = [248, 250, 252]; // #f8fafc
 
   const formatCurrency = (val: number | null | undefined): string => {
-    if (val === null || val === undefined || isNaN(Number(val))) return 'Not Available';
+    if (val === null || val === undefined || isNaN(Number(val))) return 'Awaiting Inputs';
     return `Rs. ${Number(val).toLocaleString('en-IN')}`;
   };
 
@@ -68,7 +69,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
   doc.setFontSize(8.5);
   doc.setTextColor(203, 213, 225);
   doc.text(
-    `Assessment ID: ${report.assessmentId}  |  Generated: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}  |  Category: ${report.metadata.businessCategory}`,
+    `Assessment ID: ${report.assessmentId}  |  Generated: ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}  |  Category: ${formatLabel(report.metadata.businessCategory, lang)}`,
     margin,
     29
   );
@@ -80,7 +81,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
 
   cursorY = 48;
 
-  // AI Advisory Greeting Box
+  // Advisory Greeting Box
   doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
   doc.roundedRect(margin, cursorY, contentWidth, 14, 2, 2, 'F');
   doc.setDrawColor(203, 213, 225);
@@ -115,7 +116,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
     body: [
       ['Proposed Business', execSummary.businessName],
       ['Location Context', execSummary.location],
-      ['Target Customers', execSummary.targetCustomerSegment],
+      ['Target Customers', formatTagsList(execSummary.targetCustomerSegment, lang)],
       ['Financial Viability', execSummary.financialViabilitySummary],
       ['Market & Competition', execSummary.demandAndCompetitionSummary],
     ],
@@ -136,7 +137,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
   doc.text(mktDesc, margin, cursorY);
   cursorY += mktDesc.length * 4.5 + 4;
 
-  const targetList = report.marketAnalysis.targetCustomerSegments.map((s, idx) => [`${idx + 1}. ${s}`]);
+  const targetList = report.marketAnalysis.targetCustomerSegments.map((s, idx) => [`${idx + 1}. ${formatLabel(s, lang)}`]);
   autoTable(doc, {
     startY: cursorY,
     margin: { left: margin, right: margin },
@@ -161,7 +162,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
 
   const compBody = report.competitionAnalysis.competitorProfiles.map((c) => [
     c.name,
-    c.type,
+    formatLabel(c.type, lang),
     c.distance,
     c.competitiveOffering,
     c.differentiationStrategy,
@@ -189,7 +190,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
   doc.text(priceApp, margin, cursorY);
   cursorY += priceApp.length * 4.5 + 4;
 
-  const invBody = report.pricingProductStrategy.inventoryMix.map((i) => [i.category, i.turnover, i.margin]);
+  const invBody = report.pricingProductStrategy.inventoryMix.map((i) => [formatLabel(i.category, lang), i.turnover, i.margin]);
   autoTable(doc, {
     startY: cursorY,
     margin: { left: margin, right: margin },
@@ -206,6 +207,11 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
   // ==========================================
   renderSectionHeader(5, 'Financial Feasibility & Scheme Structure');
   const fin = report.financialFeasibility;
+  const projectCost = fin.projectCost || 0;
+  const ownContribution = fin.ownContribution || 0;
+  const required10Percent = fin.requiredOwnContribution || Math.round(projectCost * 0.10);
+  const shortfall = fin.shortfall !== undefined ? fin.shortfall : Math.max(0, required10Percent - ownContribution);
+  const isCompliant = shortfall === 0;
 
   autoTable(doc, {
     startY: cursorY,
@@ -216,14 +222,21 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
     head: [['Financial Metric', 'Value', 'Financial Metric', 'Value']],
     body: [
       ['Total Project Cost', formatCurrency(fin.projectCost), 'Selected Scheme', fin.schemeName],
-      ['Applicant Own Contribution', formatCurrency(fin.ownContribution), 'Financing Percentage', `${fin.financingPercentage || 90}%`],
-      ['Loan Requirement', formatCurrency(fin.baseLoanAmount), 'Annual Interest Rate', fin.annualInterestRate || '9.5%'],
-      ['Required Margin Money', formatCurrency(fin.requiredOwnContribution), 'Repayment Tenure', `${fin.totalTenureMonths} Months`],
-      ['Margin Shortfall / Surplus', formatCurrency(fin.shortfall), 'Moratorium Period', `${fin.moratoriumMonths} Months`],
-      ['Estimated Installment (EMI)', formatCurrency(fin.installmentAmount as any), 'DSCR Capacity Status', fin.dscrStatus || 'SUFFICIENT'],
+      ['Applicant Own Contribution', `${formatCurrency(fin.ownContribution)} (${projectCost > 0 ? Math.round((ownContribution / projectCost) * 100) : 0}%)`, 'Financing Percentage', `${fin.financingPercentage || 90}%`],
+      ['Required 10% Minimum Margin', formatCurrency(required10Percent), 'Annual Interest Rate', fin.annualInterestRate || '9.5%'],
+      ['Required Bank Loan', formatCurrency(fin.baseLoanAmount), 'Repayment Tenure', `${fin.totalTenureMonths} Months`],
+      ['Margin Shortfall / Compliance', isCompliant ? 'Compliant (10%+)' : `Shortfall: ${formatCurrency(shortfall)}`, 'Moratorium Period', `${fin.moratoriumMonths} Months`],
+      ['Estimated Installment (EMI)', fin.installmentAmount ? formatCurrency(fin.installmentAmount as any) : 'Calculated at Bank', 'DSCR Capacity Status', fin.dscr !== null ? `${fin.dscr} (${fin.dscrStatus})` : 'Awaiting Revenue Inputs'],
     ],
   });
   cursorY = (doc as any).lastAutoTable.finalY + 4;
+
+  // DSCR note
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(textDark[0], textDark[1], textDark[2]);
+  doc.text(`DSCR Analysis: ${fin.dscrExplanation}`, margin, cursorY);
+  cursorY += 6;
 
   // Disclaimer
   doc.setFont('helvetica', 'italic');
@@ -246,8 +259,8 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
     head: [['Strengths (Internal)', 'Weaknesses (Internal)']],
     body: [
       [
-        report.swotAnalysis.strengths.map((s) => `• ${s}`).join('\n\n'),
-        report.swotAnalysis.weaknesses.map((w) => `• ${w}`).join('\n\n'),
+        report.swotAnalysis.strengths.map((s) => `• ${formatLabel(s, lang)}`).join('\n\n'),
+        report.swotAnalysis.weaknesses.map((w) => `• ${formatLabel(w, lang)}`).join('\n\n'),
       ],
     ],
   });
@@ -262,8 +275,8 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
     head: [['Opportunities (External)', 'Threats (External)']],
     body: [
       [
-        report.swotAnalysis.opportunities.map((o) => `• ${o}`).join('\n\n'),
-        report.swotAnalysis.threats.map((t) => `• ${t}`).join('\n\n'),
+        report.swotAnalysis.opportunities.map((o) => `• ${formatLabel(o, lang)}`).join('\n\n'),
+        report.swotAnalysis.threats.map((t) => `• ${formatLabel(t, lang)}`).join('\n\n'),
       ],
     ],
   });
@@ -274,7 +287,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
   // ==========================================
   renderSectionHeader(7, 'Risk Analysis & Mitigation Framework');
   const riskBody = report.riskAnalysis.map((r) => [
-    r.risk,
+    formatLabel(r.risk, lang),
     r.likelihood,
     r.impact,
     r.mitigationStrategy,
@@ -303,20 +316,49 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
     theme: 'grid',
     headStyles: { fillColor: headerBlue as any, textColor: 255, fontSize: 8 },
     bodyStyles: { fontSize: 7.5, textColor: textDark as any },
-    head: [['Parameter', 'Sahayak Ground Reality Response']],
+    head: [['Parameter', 'User Ground Reality Response']],
     body: [
-      ['Road & Transport Access', infra.roadTransport],
-      ['Electricity Availability', infra.electricity],
-      ['Water Availability', infra.water],
-      ['Internet & Mobile Connectivity', infra.internet],
+      ['Road & Transport Access', formatLabel(infra.roadTransport, lang)],
+      ['Electricity Availability', formatLabel(infra.electricity, lang)],
+      ['Water Availability', formatLabel(infra.water, lang)],
+      ['Internet & Mobile Connectivity', formatLabel(infra.internet, lang)],
       ['Nearby Competitors (Reported)', infra.userReportedCompetitors],
-      ['Seasonal Constraints', `${infra.seasonalConstraints} ${infra.seasonalExplanation ? `— ${infra.seasonalExplanation}` : ''}`],
-      ['Demand Assessment', `${infra.localDemandLevel} (${infra.demandReason})`],
-      ['Target Customers & Channels', `${infra.targetCustomers} | Channels: ${infra.salesChannels}`],
-      ['Key Challenges & Support', `${infra.businessChallenges} | Needed: ${infra.supportRequired}`],
+      ['Seasonal Constraints', `${formatTagsList(infra.seasonalConstraints, lang)} ${infra.seasonalExplanation ? `— ${infra.seasonalExplanation}` : ''}`],
+      ['Demand Assessment', `${formatLabel(infra.localDemandLevel, lang)} (${infra.demandReason})`],
+      ['Target Customers & Channels', `${formatTagsList(infra.targetCustomers, lang)} | Channels: ${infra.salesChannels}`],
+      ['Key Challenges & Support', `${formatTagsList(infra.businessChallenges, lang)} | Needed: ${infra.supportRequired}`],
     ],
   });
-  cursorY = (doc as any).lastAutoTable.finalY + 8;
+  cursorY = (doc as any).lastAutoTable.finalY + 6;
+
+  // Subsection 8B: Actionable Infrastructure Recommendations
+  if (infra.actionableRecommendations && infra.actionableRecommendations.length > 0) {
+    checkPageBreak(20);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(headerBlue[0], headerBlue[1], headerBlue[2]);
+    doc.text('Infrastructure Findings & Recommended Actions:', margin, cursorY);
+    cursorY += 4;
+
+    const actionBody = infra.actionableRecommendations.map((item: any) => [
+      item.facilityName,
+      item.ratingLabel,
+      item.impact,
+      item.recommendations.map((r: string) => `• ${r}`).join('\n'),
+      item.priority,
+    ]);
+
+    autoTable(doc, {
+      startY: cursorY,
+      margin: { left: margin, right: margin },
+      theme: 'grid',
+      headStyles: { fillColor: headerBlue as any, textColor: 255, fontSize: 7.5 },
+      bodyStyles: { fontSize: 7, textColor: textDark as any },
+      head: [['Facility', 'Rating', 'Operational Impact', 'Recommended Actions', 'Priority']],
+      body: actionBody,
+    });
+    cursorY = (doc as any).lastAutoTable.finalY + 8;
+  }
 
   // ==========================================
   // SECTION 9: SUPPORT ORGANIZATIONS
@@ -324,7 +366,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
   renderSectionHeader(9, 'Local Support Organization Recommendations (Surat)');
   const orgBody = report.supportOrganizations.map((o) => [
     o.name,
-    o.category,
+    formatLabel(o.category, lang),
     `${o.address}\nPhone: ${o.phone || 'N/A'}\nEmail: ${o.email || 'N/A'}\nWeb: ${o.website || 'N/A'}`,
     o.explanation,
   ]);
@@ -357,7 +399,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData): voi
   const vidBody = report.curatedVideos.map((v) => [
     v.title,
     v.language,
-    v.category,
+    formatLabel(v.category, lang),
     v.url,
   ]);
 

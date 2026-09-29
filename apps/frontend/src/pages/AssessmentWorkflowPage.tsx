@@ -32,6 +32,7 @@ import {
   MapPin,
   Briefcase,
   AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface AssessmentWorkflowPageProps {
@@ -1171,20 +1172,77 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
                 </button>
               </div>
 
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '0.85rem' }}>
-                {selectedResources.hasLand && <span className="status-pill status-completed">✓ {t.resourceLand}</span>}
-                {selectedResources.hasShop && <span className="status-pill status-completed">✓ {t.resourceShop}</span>}
-                {selectedResources.hasMachinery && <span className="status-pill status-completed">✓ {t.resourceMachinery}</span>}
-                {selectedResources.hasTools && <span className="status-pill status-completed">✓ {t.resourceTools}</span>}
-                {selectedResources.hasInfrastructure && <span className="status-pill status-completed">✓ {t.resourceInfrastructure}</span>}
-                {selectedResources.hasSavings && <span className="status-pill status-completed">✓ {t.resourceSavings}</span>}
-                {selectedResources.hasOther && <span className="status-pill status-completed">✓ {t.resourceOther}: {otherResourceDesc}</span>}
-                {selectedResources.hasNone && <span className="status-pill status-pending">{t.resourceNone}</span>}
+              {/* Vertical list of selected resources */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.88rem', marginBottom: '14px' }}>
+                {selectedResources.hasLand && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)' }}>
+                    <CheckCircle2 size={16} color="var(--brand-green)" style={{ flexShrink: 0 }} />
+                    <span>{t.resourceLand}</span>
+                  </div>
+                )}
+                {selectedResources.hasShop && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)' }}>
+                    <CheckCircle2 size={16} color="var(--brand-green)" style={{ flexShrink: 0 }} />
+                    <span>{t.resourceShop}</span>
+                  </div>
+                )}
+                {selectedResources.hasMachinery && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)' }}>
+                    <CheckCircle2 size={16} color="var(--brand-green)" style={{ flexShrink: 0 }} />
+                    <span>{t.resourceMachinery}</span>
+                  </div>
+                )}
+                {selectedResources.hasTools && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)' }}>
+                    <CheckCircle2 size={16} color="var(--brand-green)" style={{ flexShrink: 0 }} />
+                    <span>{t.resourceTools}</span>
+                  </div>
+                )}
+                {selectedResources.hasInfrastructure && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)' }}>
+                    <CheckCircle2 size={16} color="var(--brand-green)" style={{ flexShrink: 0 }} />
+                    <span>{t.resourceInfrastructure}</span>
+                  </div>
+                )}
+                {selectedResources.hasSavings && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)' }}>
+                    <CheckCircle2 size={16} color="var(--brand-green)" style={{ flexShrink: 0 }} />
+                    <span>{t.resourceSavings}</span>
+                  </div>
+                )}
+                {selectedResources.hasOther && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-main)' }}>
+                    <CheckCircle2 size={16} color="var(--brand-green)" style={{ flexShrink: 0 }} />
+                    <span>{t.resourceOther}: {otherResourceDesc}</span>
+                  </div>
+                )}
+                {selectedResources.hasNone && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)' }}>
+                    <span style={{ fontSize: '0.85rem' }}>ℹ️ {t.resourceNone}</span>
+                  </div>
+                )}
               </div>
 
+              {/* Separately and clearly displayed monetary funds / cash savings */}
               {availableFunds !== '' && (
-                <div style={{ marginTop: '10px', fontSize: '0.9rem' }}>
-                  <strong>{t.availableFundsTitle}:</strong> ₹{Number(availableFunds).toLocaleString()}
+                <div
+                  style={{
+                    marginTop: '12px',
+                    padding: '10px 14px',
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border-light)',
+                    borderRadius: 'var(--radius-sm)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                    {t.availableFundsTitle}
+                  </span>
+                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--brand-green)' }}>
+                    ₹{Number(availableFunds).toLocaleString('en-IN')}
+                  </span>
                 </div>
               )}
             </div>

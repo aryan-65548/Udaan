@@ -170,28 +170,52 @@ export async function generateOrGetReport(assessmentId: string, userId: string) 
   const run = financeData?.run;
   const scheme = financeData?.scheme;
 
+  const theoretical10Percent = projectCostVal !== null ? Math.round(projectCostVal * 0.10) : null;
+  const actualOwnContrib = ownContributionVal !== null ? ownContributionVal : (run ? Number(run.ownContribution) : 0);
+  const marginShortfall = (theoretical10Percent !== null && actualOwnContrib !== null)
+    ? Math.max(0, theoretical10Percent - actualOwnContrib)
+    : 0;
+  const isMarginCompliant = marginShortfall === 0;
+
+  const computedLoanAmount = (projectCostVal !== null && actualOwnContrib !== null)
+    ? Math.max(0, projectCostVal - actualOwnContrib)
+    : (run ? Number(run.loanAmount) : null);
+
+  const hasRevenueInputs = run?.monthlyRevenue !== null && run?.monthlyOperatingCost !== null;
+  const dscrVal = run?.dscr ? Number(run.dscr) : null;
+  const dscrStatus = dscrVal !== null
+    ? (dscrVal >= 1.5 ? 'SUFFICIENT' : dscrVal >= 1.0 ? 'TIGHT' : 'INSUFFICIENT')
+    : 'UNAVAILABLE';
+  const dscrExplanation = dscrVal !== null
+    ? (dscrVal >= 1.5
+        ? 'Strong debt service coverage: projected operating cash flow comfortably covers scheduled loan repayments (DSCR >= 1.5).'
+        : dscrVal >= 1.0
+        ? 'Moderate debt service coverage: projected operating cash flow meets debt obligations with a tight safety margin (1.0 <= DSCR < 1.5).'
+        : 'Insufficient debt service coverage: projected operating surplus is less than scheduled debt obligations (DSCR < 1.0).')
+    : 'Awaiting projected revenue and operating expense inputs to calculate Debt Service Coverage Ratio (DSCR).';
+
   const financialSummary = {
     projectCost: projectCostVal,
-    ownContribution: ownContributionVal,
-    baseLoanAmount: (projectCostVal !== null && ownContributionVal !== null)
-      ? projectCostVal - ownContributionVal
-      : (run ? Number(run.loanAmount) : null),
-    loanAmount: run ? Number(run.loanAmount) : null,
-    requiredOwnContribution: ownContributionVal,
-    shortfall: 0,
-    theoretical10PercentMargin: projectCostVal ? projectCostVal * 0.1 : null,
+    ownContribution: actualOwnContrib,
+    baseLoanAmount: computedLoanAmount,
+    loanAmount: computedLoanAmount,
+    requiredOwnContribution: theoretical10Percent,
+    shortfall: marginShortfall,
+    isEligibleMargin: isMarginCompliant,
+    theoretical10PercentMargin: theoretical10Percent,
     financingPercentage: scheme?.financingPercentage
       ? Number(scheme.financingPercentage)
-      : (run?.loanAmount && projectCostVal ? (Number(run.loanAmount) / projectCostVal) * 100 : null),
+      : (computedLoanAmount && projectCostVal ? Math.round((computedLoanAmount / projectCostVal) * 100) : 90),
     schemeCode: scheme?.schemeCode || 'MUDRA_SHISHU_KISHOR',
     schemeName: scheme?.schemeName || 'Pradhan Mantri Mudra Yojana (PMMY)',
     annualInterestRate: scheme?.interestRate ? `${scheme.interestRate}%` : (run?.interestRate ? `${run.interestRate}%` : '9.5%'),
     totalTenureMonths: scheme?.tenureMonths || run?.tenureMonths || 60,
     moratoriumMonths: scheme?.moratoriumMonths || run?.moratoriumMonths || 0,
     installmentAmount: run?.installmentAmount ? Number(run.installmentAmount) : (run?.emi ? Number(run.emi) : null),
-    dscr: run?.dscr ? Number(run.dscr) : null,
-    dscrStatus: run?.dscr ? (Number(run.dscr) >= 1.5 ? 'SUFFICIENT' : 'TIGHT') : 'UNAVAILABLE',
-    dscrExplanation: 'Debt Service Coverage Ratio calculated from projected cash flows.',
+    dscr: dscrVal,
+    dscrStatus,
+    dscrExplanation,
+    hasRevenueInputs,
     repaymentSchedule: financeData?.schedule || [],
     isScheduleCalculable: (financeData?.schedule?.length || 0) > 0,
     disclaimer:
@@ -207,11 +231,112 @@ export async function generateOrGetReport(assessmentId: string, userId: string) 
   const custQ: any = respMap.get('CUSTOMERS_MARKET')?.savedResponse;
   const riskQ: any = respMap.get('BUSINESS_RISKS')?.savedResponse;
 
+  const roadRating = (infraQ?.road_transport || 'AVERAGE').toUpperCase();
+  const elecRating = (infraQ?.electricity || 'AVERAGE').toUpperCase();
+  const waterRating = (infraQ?.water || 'GOOD').toUpperCase();
+  const internetRating = (infraQ?.connectivity || infraQ?.internet_mobile || 'POOR').toUpperCase();
+
+  const infrastructureActionItems = [
+    {
+      facilityKey: 'road_transport',
+      facilityName: 'Road & Transport Access',
+      rating: roadRating,
+      ratingLabel: roadRating === 'GOOD' ? 'Good' : roadRating === 'AVERAGE' ? 'Average' : 'Poor',
+      impact:
+        roadRating === 'GOOD'
+          ? 'Smooth arterial connectivity facilitates prompt supplier turnaround and convenient walk-in traffic.'
+          : 'Average/Moderate road connectivity impacts stock replenishment frequency, supplier delivery turnaround, customer reach, and inbound freight costs.',
+      recommendations:
+        roadRating === 'GOOD'
+          ? [
+              'Leverage frequent small-batch deliveries from distributors to optimize shelf space and reduce capital tied up in inventory.',
+              'Explore offering local bicycle/two-wheeler home delivery to nearby residential households within a 2-3 km radius.',
+            ]
+          : [
+              'Establish scheduled, fixed delivery days with nearby Bardoli and Surat wholesale mandi distributors to consolidate freight.',
+              'Compare transportation costs and delivery minimums among multiple suppliers to reduce per-unit delivery overhead.',
+              'Maintain a 7 to 10-day buffer stock for essential fast-moving consumer goods (FMCG) and staples.',
+              'Check safe loading/unloading access for mini commercial vehicles (e.g. pickup trucks) and designate off-peak unloading hours.',
+            ],
+      priority: roadRating === 'POOR' ? 'High' : roadRating === 'AVERAGE' ? 'Medium' : 'Low',
+    },
+    {
+      facilityKey: 'electricity',
+      facilityName: 'Electricity Availability',
+      rating: elecRating,
+      ratingLabel: elecRating === 'GOOD' ? 'Good' : elecRating === 'AVERAGE' ? 'Average' : 'Poor',
+      impact:
+        elecRating === 'GOOD'
+          ? 'Stable grid power supports continuous retail lighting, POS billing, and dairy/beverage refrigeration.'
+          : 'Average/Intermittent power supply or voltage drops pose operational disruption risks to shop lighting, digital billing machines, and dairy/cold beverage refrigeration.',
+      recommendations:
+        elecRating === 'GOOD'
+          ? [
+              'Maximize customer product visibility with energy-efficient LED display fixtures.',
+              'Avoid capital-intensive diesel generator investments while grid reliability remains high.',
+            ]
+          : [
+              'Use energy-efficient LED luminaires and display lights to reduce wattage load and operating costs.',
+              'Maintain a reliable battery backup / micro-UPS for digital billing terminals, barcode scanners, and UPI payment soundboxes during outages.',
+              'Evaluate an appropriately sized 800VA–1100VA pure sine-wave inverter based on actual essential load before purchasing expensive equipment.',
+              'Protect temperature-sensitive dairy, milk pouches, and ice creams with thermal chest cooler insulation and dedicated voltage stabilizers.',
+            ],
+      priority: elecRating === 'GOOD' ? 'Low' : 'High',
+    },
+    {
+      facilityKey: 'water',
+      facilityName: 'Water Supply',
+      rating: waterRating,
+      ratingLabel: waterRating === 'GOOD' ? 'Good' : waterRating === 'AVERAGE' ? 'Average' : 'Poor',
+      impact:
+        waterRating === 'GOOD'
+          ? 'Reliable water supply provides a key operational advantage for maintaining premise hygiene, staff sanitation, and cleaning standards for edible goods.'
+          : 'Limited water access requires dedicated storage arrangements to maintain retail food safety and hygiene standards.',
+      recommendations:
+        waterRating === 'GOOD'
+          ? [
+              'Maintain hygienic storage and regular cleaning schedules for food grain storage drums and display racks.',
+              'Ensure safe filtered drinking water for retail staff and visiting customers.',
+              'Avoid unnecessary water infrastructure capital expenses while existing municipal/panchayat supply remains reliable.',
+            ]
+          : [
+              'Install a standard 200–500L overhead water storage tank for daily shop cleaning and washroom sanitation.',
+              'Ensure sealed, moisture-proof containers for food grains and loose staples to prevent contamination.',
+            ],
+      priority: waterRating === 'GOOD' ? 'Low' : 'Medium',
+    },
+    {
+      facilityKey: 'connectivity',
+      facilityName: 'Internet / Mobile Connectivity',
+      rating: internetRating,
+      ratingLabel: internetRating === 'GOOD' ? 'Good' : internetRating === 'AVERAGE' ? 'Average' : 'Poor',
+      impact:
+        internetRating === 'GOOD'
+          ? 'High-speed mobile data enables instantaneous UPI payments, cloud bookkeeping, and digital supplier procurement.'
+          : 'Weak mobile network and poor cellular internet create serious friction for UPI QR payments, digital billing, customer messaging, and distributor WhatsApp ordering.',
+      recommendations:
+        internetRating === 'GOOD'
+          ? [
+              'Encourage cashless UPI payments with prominent counter QR standees and instant audio soundbox confirmation.',
+              'Adopt digital bookkeeping apps (Khata) for customer credit and supplier payment reconciliation.',
+            ]
+          : [
+              'Test multiple mobile cellular networks (Jio, Airtel, Vi, BSNL) directly at the shop counter location to identify the strongest signal.',
+              'Keep a reliable primary network SIM and an alternate fallback SIM card for cashier payment confirmation.',
+              'Maintain a compliant offline manual counter receipt / paper record process during network outages.',
+              'Keep static QR standees with SMS/soundbox backup and reconcile all digital transactions once connectivity returns.',
+              'Consider fixed wireless access (FWA) or local fiber broadband only after verifying local ISP availability, installation cost, and business requirements.',
+            ],
+      priority: internetRating === 'POOR' ? 'High' : internetRating === 'AVERAGE' ? 'Medium' : 'Low',
+    },
+  ];
+
   const sahayakInfrastructure = {
-    roadTransport: infraQ?.road_transport || 'Requires local verification',
-    electricity: infraQ?.electricity || 'Requires local verification',
-    water: infraQ?.water || 'Requires local verification',
-    internet: infraQ?.connectivity || infraQ?.internet_mobile || 'Requires local verification',
+    roadTransport: roadRating,
+    electricity: elecRating,
+    water: waterRating,
+    internet: internetRating,
+    actionableRecommendations: infrastructureActionItems,
     userReportedCompetitors: compQ?.hasNoCompetitors
       ? 'No direct nearby competitors identified by applicant.'
       : Array.isArray(compQ?.competitors) && compQ.competitors.length > 0

@@ -294,7 +294,6 @@ export interface Translations {
   returnToDashboard: string;
   backToAssessments: string;
 
-  // Status Labels
   statusDraft: string;
   statusInProgress: string;
   statusCompleted: string;
@@ -303,6 +302,76 @@ export interface Translations {
   statusAiAnalyzing: string;
   statusReportReady: string;
   notesPlaceholder: string;
+
+  // Report & Feasibility Keys
+  reportHeaderTitle: string;
+  reportHeaderSubtitle: string;
+  downloadPdfBtn: string;
+  downloadingPdfBtn: string;
+  pdfSuccessNotice: string;
+  section1Nav: string;
+  section2Nav: string;
+  section3Nav: string;
+  section4Nav: string;
+  section5Nav: string;
+  section6Nav: string;
+  section7Nav: string;
+  section8Nav: string;
+  section9Nav: string;
+  section10Nav: string;
+  section11Nav: string;
+  section12Nav: string;
+  targetCustomerSegmentsLabel: string;
+  financialViabilitySnapshotLabel: string;
+  keyStrengthsLabel: string;
+  criticalWatchpointsLabel: string;
+  demandDriversLabel: string;
+  competitorProfilesTable: string;
+  differentiationStrategyLabel: string;
+  inventoryMixTable: string;
+  turnoverVelocityLabel: string;
+  grossMarginRangeLabel: string;
+  workingCapitalDisciplineLabel: string;
+  financialFeasibilityTitle: string;
+  totalOutlayLabel: string;
+  ownEquityLabel: string;
+  bankLoanLabel: string;
+  monthlyEmiLabel: string;
+  minOwnContributionBadge: string;
+  marginShortfallAlert: string;
+  marginCompliantBadge: string;
+  schemeDetailsTitle: string;
+  interestRateLabel: string;
+  tenureMoratoriumLabel: string;
+  dscrStatusLabel: string;
+  amortizationScheduleTitle: string;
+  showScheduleBtn: string;
+  hideScheduleBtn: string;
+  periodLabel: string;
+  openingPrincipalLabel: string;
+  principalPaymentLabel: string;
+  interestPaymentLabel: string;
+  installmentAmountLabel: string;
+  closingPrincipalLabel: string;
+  disclaimerLabel: string;
+  swotStrengthsLabel: string;
+  swotWeaknessesLabel: string;
+  swotOpportunitiesLabel: string;
+  swotThreatsLabel: string;
+  riskFactorLabel: string;
+  likelihoodImpactLabel: string;
+  mitigationStrategyLabel: string;
+  monitoringIndicatorLabel: string;
+  infrastructureAssessmentTitle: string;
+  infrastructureFindingsTitle: string;
+  businessImpactLabel: string;
+  recommendedActionsLabel: string;
+  operationalPriorityLabel: string;
+  supportOrganizationsTitle: string;
+  learningVideosTitle: string;
+  actionPlanTitle: string;
+  conclusionTitle: string;
+  limitationsTitle: string;
 }
 
 export const translations: Record<SupportedLanguage, Translations> = {
@@ -615,6 +684,76 @@ export const translations: Record<SupportedLanguage, Translations> = {
     statusAiAnalyzing: 'Analyzing',
     statusReportReady: 'Report Ready',
     notesPlaceholder: 'Enter verification notes or observations...',
+
+    // Report & Feasibility Keys
+    reportHeaderTitle: 'Business Feasibility & Advisory Intelligence Report',
+    reportHeaderSubtitle: 'Comprehensive Viability Assessment, Financial Projections & Ground Reality Evaluation',
+    downloadPdfBtn: 'Download PDF Report',
+    downloadingPdfBtn: 'Generating PDF...',
+    pdfSuccessNotice: 'PDF Report downloaded successfully! Assessment status recorded as COMPLETED.',
+    section1Nav: '1. Executive Summary',
+    section2Nav: '2. Market Analysis',
+    section3Nav: '3. Competition',
+    section4Nav: '4. Pricing & Products',
+    section5Nav: '5. Financial Feasibility',
+    section6Nav: '6. SWOT Analysis',
+    section7Nav: '7. Risks & Mitigation',
+    section8Nav: '8. Infrastructure',
+    section9Nav: '9. Support Organizations',
+    section10Nav: '10. Learning Resources',
+    section11Nav: '11. Action Plan',
+    section12Nav: '12. Conclusion',
+    targetCustomerSegmentsLabel: 'Target Customers',
+    financialViabilitySnapshotLabel: 'Financial Viability Snapshot',
+    keyStrengthsLabel: 'Key Commercial Strengths',
+    criticalWatchpointsLabel: 'Critical Watchpoints',
+    demandDriversLabel: 'Local Demand Drivers',
+    competitorProfilesTable: 'Local Competitor Profiles',
+    differentiationStrategyLabel: 'Differentiation Strategy',
+    inventoryMixTable: 'Product Category & Target Margin Mix',
+    turnoverVelocityLabel: 'Turnover Velocity',
+    grossMarginRangeLabel: 'Target Gross Margin Range',
+    workingCapitalDisciplineLabel: 'Working Capital & Credit Discipline',
+    financialFeasibilityTitle: 'Financial Feasibility & Scheme Structure',
+    totalOutlayLabel: 'Total Project Outlay',
+    ownEquityLabel: 'Own Equity Contribution',
+    bankLoanLabel: 'Required Bank Loan',
+    monthlyEmiLabel: 'Estimated Monthly Installment (EMI)',
+    minOwnContributionBadge: '10% Minimum Own Contribution Rule',
+    marginShortfallAlert: 'Own Equity Shortfall: A minimum applicant equity margin of 10% is required under government guidelines.',
+    marginCompliantBadge: 'Meets 10% Minimum Equity Requirement',
+    schemeDetailsTitle: 'Government Credit Scheme Parameters',
+    interestRateLabel: 'Annual Interest Rate',
+    tenureMoratoriumLabel: 'Tenure & Moratorium',
+    dscrStatusLabel: 'DSCR Debt Service Status',
+    amortizationScheduleTitle: 'Detailed Loan Amortization Schedule',
+    showScheduleBtn: 'View Full Amortization Schedule',
+    hideScheduleBtn: 'Hide Full Amortization Schedule',
+    periodLabel: 'Period',
+    openingPrincipalLabel: 'Opening Principal',
+    principalPaymentLabel: 'Principal',
+    interestPaymentLabel: 'Interest',
+    installmentAmountLabel: 'Installment',
+    closingPrincipalLabel: 'Closing Balance',
+    disclaimerLabel: 'Financial Advisory Disclaimer',
+    swotStrengthsLabel: 'Strengths (Internal)',
+    swotWeaknessesLabel: 'Weaknesses (Internal)',
+    swotOpportunitiesLabel: 'Opportunities (External)',
+    swotThreatsLabel: 'Threats (External)',
+    riskFactorLabel: 'Risk Factor',
+    likelihoodImpactLabel: 'Likelihood / Impact',
+    mitigationStrategyLabel: 'Mitigation Strategy',
+    monitoringIndicatorLabel: 'Monitoring Indicator',
+    infrastructureAssessmentTitle: 'Infrastructure & Ground Reality Assessment',
+    infrastructureFindingsTitle: 'Infrastructure Findings & Recommended Actions',
+    businessImpactLabel: 'Operational Business Impact',
+    recommendedActionsLabel: 'Recommended Actionable Steps',
+    operationalPriorityLabel: 'Operational Priority',
+    supportOrganizationsTitle: 'Empanelled Support Organizations & Local NGOs',
+    learningVideosTitle: 'Curated Video & Training Resources',
+    actionPlanTitle: 'Step-by-Step Business Implementation Action Plan',
+    conclusionTitle: 'Conclusion & Strategic Advisory Summary',
+    limitationsTitle: 'Methodology & Advisory Limitations',
   },
 
   hi: {
@@ -926,6 +1065,76 @@ export const translations: Record<SupportedLanguage, Translations> = {
     statusAiAnalyzing: 'विश्लेषण जारी है',
     statusReportReady: 'रिपोर्ट तैयार है',
     notesPlaceholder: 'सत्यापन संबंधी टिप्पणियां या विवरण दर्ज करें...',
+
+    // Report & Feasibility Keys (Hindi)
+    reportHeaderTitle: 'व्यापार व्यवहार्यता एवं सलाहकार आसूचना रिपोर्ट',
+    reportHeaderSubtitle: 'व्यापक व्यवहार्यता मूल्यांकन, वित्तीय अनुमान एवं धरातलीय वास्तविकता रिपोर्ट',
+    downloadPdfBtn: 'पीडीएफ रिपोर्ट डाउनलोड करें',
+    downloadingPdfBtn: 'पीडीएफ तैयार हो रही है...',
+    pdfSuccessNotice: 'पीडीएफ रिपोर्ट सफलतापूर्वक डाउनलोड हो गई! मूल्यांकन स्थिति पूर्ण (COMPLETED) दर्ज कर ली गई है।',
+    section1Nav: '1. कार्यकारी सारांश',
+    section2Nav: '2. बाजार विश्लेषण',
+    section3Nav: '3. प्रतिस्पर्धा',
+    section4Nav: '4. मूल्य निर्धारण',
+    section5Nav: '5. वित्तीय व्यवहार्यता',
+    section6Nav: '6. स्वाट (SWOT)',
+    section7Nav: '7. जोखिम एवं निवारण',
+    section8Nav: '8. बुनियादी ढांचा',
+    section9Nav: '9. सहायक संस्थाएं',
+    section10Nav: '10. प्रशिक्षण संसाधन',
+    section11Nav: '11. कार्ययोजना',
+    section12Nav: '12. निष्कर्ष',
+    targetCustomerSegmentsLabel: 'लक्षित ग्राहक वर्ग',
+    financialViabilitySnapshotLabel: 'वित्तीय व्यवहार्यता अवलोकन',
+    keyStrengthsLabel: 'प्रमुख व्यावसायिक मजबूती',
+    criticalWatchpointsLabel: 'महत्वपूर्ण चेतावनी बिंदु',
+    demandDriversLabel: 'स्थानीय मांग के मुख्य कारक',
+    competitorProfilesTable: 'स्थानीय प्रतिस्पर्धी प्रोफाइल',
+    differentiationStrategyLabel: 'प्रतिस्पर्धी विभेदीकरण रणनीति',
+    inventoryMixTable: 'उत्पाद श्रेणी एवं लक्षित मार्जिन मिश्रण',
+    turnoverVelocityLabel: 'बिक्री गति (टर्नओवर)',
+    grossMarginRangeLabel: 'लक्षित सकल मार्जिन दायरा',
+    workingCapitalDisciplineLabel: 'कार्यशील पूंजी एवं उधार अनुशासन',
+    financialFeasibilityTitle: 'वित्तीय व्यवहार्यता एवं ऋण योजना संरचना',
+    totalOutlayLabel: 'कुल परियोजना लागत',
+    ownEquityLabel: 'स्वयं का पूंजी योगदान',
+    bankLoanLabel: 'आवश्यक बैंक ऋण',
+    monthlyEmiLabel: 'अनुमानित मासिक किस्त (EMI)',
+    minOwnContributionBadge: 'न्यूनतम 10% स्वयं का योगदान नियम',
+    marginShortfallAlert: 'स्वयं की पूंजी में कमी: सरकारी दिशानिर्देशों के तहत न्यूनतम 10% आवेदक मार्जिन अनिवार्य है।',
+    marginCompliantBadge: 'न्यूनतम 10% स्वयं योगदान की शर्त पूरी होती है',
+    schemeDetailsTitle: 'सरकारी क्रेडिट योजना मानदंड',
+    interestRateLabel: 'वार्षिक ब्याज दर',
+    tenureMoratoriumLabel: 'ऋण अवधि एवं मोरेटोरियम',
+    dscrStatusLabel: 'डीएससीआर (DSCR) ऋण सेवा स्थिति',
+    amortizationScheduleTitle: 'विस्तृत ऋण अदायगी एवं परिशोधन अनुसूची',
+    showScheduleBtn: 'संपूर्ण परिशोधन अनुसूची देखें',
+    hideScheduleBtn: 'परिशोधन अनुसूची छुपाएं',
+    periodLabel: 'किस्त सं.',
+    openingPrincipalLabel: 'प्रारंभिक शेष',
+    principalPaymentLabel: 'मूलधन',
+    interestPaymentLabel: 'ब्याज',
+    installmentAmountLabel: 'कुल किस्त',
+    closingPrincipalLabel: 'अंतिम शेष',
+    disclaimerLabel: 'वित्तीय सलाहकार अस्वीकरण',
+    swotStrengthsLabel: 'ताकत (आंतरिक मजबूती)',
+    swotWeaknessesLabel: 'कमजोरियां (आंतरिक सुधार क्षेत्र)',
+    swotOpportunitiesLabel: 'अवसर (बाहरी संभावनाएं)',
+    swotThreatsLabel: 'चुनौतियां (बाहरी जोखिम)',
+    riskFactorLabel: 'जोखिम कारक',
+    likelihoodImpactLabel: 'संभावना / प्रभाव',
+    mitigationStrategyLabel: 'निवारण रणनीति',
+    monitoringIndicatorLabel: 'निगरानी संकेतक',
+    infrastructureAssessmentTitle: 'बुनियादी ढांचा एवं जमीनी हकीकत मूल्यांकन',
+    infrastructureFindingsTitle: 'बुनियादी ढांचा निष्कर्ष एवं अनुशंसित कार्ययोजना',
+    businessImpactLabel: 'व्यावसायिक संचालन प्रभाव',
+    recommendedActionsLabel: 'अनुशंसित व्यावहारिक कदम',
+    operationalPriorityLabel: 'प्राथमिकता',
+    supportOrganizationsTitle: 'सूचीबद्ध सहायता संगठन एवं स्थानीय एनजीओ',
+    learningVideosTitle: 'चयनित वीडियो एवं व्यावहारिक प्रशिक्षण संसाधन',
+    actionPlanTitle: 'चरणबद्ध व्यापार क्रियान्वयन कार्ययोजना (Action Plan)',
+    conclusionTitle: 'निष्कर्ष एवं रणनीतिक सलाहकार सारांश',
+    limitationsTitle: 'पद्धति एवं सलाहकार सीमाएं',
   },
 
   gu: {
@@ -1237,5 +1446,75 @@ export const translations: Record<SupportedLanguage, Translations> = {
     statusAiAnalyzing: 'વિશ્લેષણ ચાલુ છે',
     statusReportReady: 'રિપોર્ટ તૈયાર છે',
     notesPlaceholder: 'ચકાસણી નોંધો અથવા અવલોકનો દાખલ કરો...',
+
+    // Report & Feasibility Keys (Gujarati)
+    reportHeaderTitle: 'વ્યવસાય શક્યતા અને સલાહકાર રિપોર્ટ',
+    reportHeaderSubtitle: 'સંપૂર્ણ શક્યતા મૂલ્યાંકન, નાણાકીય અંદાજ અને જમીની વાસ્તવિકતા રિપોર્ટ',
+    downloadPdfBtn: 'પીડીએફ રિપોર્ટ ડાઉનલોડ કરો',
+    downloadingPdfBtn: 'પીડીએફ તૈયાર થઈ રહી છે...',
+    pdfSuccessNotice: 'પીડીએફ રિપોર્ટ સફળતાપૂર્વક ડાઉનલોડ થયો! મૂલ્યાંકન સ્થિતિ પૂર્ણ (COMPLETED) તરીકે નોંધવામાં આવી છે.',
+    section1Nav: '1. કાર્યકારી સારાંશ',
+    section2Nav: '2. બજાર વિશ્લેષણ',
+    section3Nav: '3. સ્પર્ધા',
+    section4Nav: '4. ભાવ નિર્ધારણ',
+    section5Nav: '5. નાણાકીય શક્યતા',
+    section6Nav: '6. સ્વોટ (SWOT)',
+    section7Nav: '7. જોખમ અને નિવારણ',
+    section8Nav: '8. ઈન્ફ્રાસ્ટ્રક્ચર',
+    section9Nav: '9. સહાયક સંસ્થાઓ',
+    section10Nav: '10. શિક્ષણ સંસાધનો',
+    section11Nav: '11. કાર્ય યોજના',
+    section12Nav: '12. નિષ્કર્ષ',
+    targetCustomerSegmentsLabel: 'લક્ષિત ગ્રાહકો',
+    financialViabilitySnapshotLabel: 'નાણાકીય વ્યવહારિકતા સારાંશ',
+    keyStrengthsLabel: 'મુખ્ય વ્યાપારી શક્તિઓ',
+    criticalWatchpointsLabel: 'મહત્વપૂર્ણ ચેતવણી મુદ્દાઓ',
+    demandDriversLabel: 'સ્થાનિક માંગના પરિબળો',
+    competitorProfilesTable: 'સ્થાનિક સ્પર્ધકોની રૂપરેખા',
+    differentiationStrategyLabel: 'સ્પર્ધાત્મક વ્યૂહરચના',
+    inventoryMixTable: 'ઉત્પાદન શ્રેણી અને લક્ષિત માર્જિન મિશ્રણ',
+    turnoverVelocityLabel: 'વેચાણ ગતિ (ટર્નઓવર)',
+    grossMarginRangeLabel: 'લક્ષિત ગ્રોસ માર્જિન શ્રેણી',
+    workingCapitalDisciplineLabel: 'કાર્યકારી મૂડી અને ઉધાર શિસ્ત',
+    financialFeasibilityTitle: 'નાણાકીય વ્યવહારિકતા અને ધિરાણ યોજના માળખું',
+    totalOutlayLabel: 'કુલ પ્રોજેક્ટ ખર્ચ',
+    ownEquityLabel: 'પોતાનું મૂડી યોગદાન',
+    bankLoanLabel: 'જરૂરી બેંક લોન',
+    monthlyEmiLabel: 'અંદાજિત માસિક હપ્તો (EMI)',
+    minOwnContributionBadge: 'લઘુત્તમ 10% પોતાનું યોગદાન નિયમ',
+    marginShortfallAlert: 'સ્વ-મૂડીની ઘટ: સરકારી માર્ગદર્શિકા હેઠળ લઘુત્તમ 10% અરજદાર માર્જિન ફરજિયાત છે.',
+    marginCompliantBadge: 'લઘુત્તમ 10% પોતાના યોગદાનની શરત પૂરી થાય છે',
+    schemeDetailsTitle: 'સરકારી ક્રેડિટ યોજના પરિમાણો',
+    interestRateLabel: 'વાર્ષિક વ્યાજ દર',
+    tenureMoratoriumLabel: 'મુદ્દત અને મોરેટોરિયમ',
+    dscrStatusLabel: 'ડીએસસીઆર (DSCR) દેવા સેવા સ્થિતિ',
+    amortizationScheduleTitle: 'વિગતવાર લોન પુનઃચુકવણી સમયપત્રક',
+    showScheduleBtn: 'સંપૂર્ણ લોન ચુકવણી સમયપત્રક જુઓ',
+    hideScheduleBtn: 'સમયપત્રક છુપાવો',
+    periodLabel: 'હપ્તો નં.',
+    openingPrincipalLabel: 'શરૂઆતની બાકી રકમ',
+    principalPaymentLabel: 'મુદ્દલ',
+    interestPaymentLabel: 'વ્યાજ',
+    installmentAmountLabel: 'કુલ હપ્તો',
+    closingPrincipalLabel: 'અંતિમ બાકી રકમ',
+    disclaimerLabel: 'નાણાકીય સલાહકાર ડિસ્ક્લેમર',
+    swotStrengthsLabel: 'શક્તિઓ (આંતરિક ફાયદા)',
+    swotWeaknessesLabel: 'નબળાઈઓ (સુધારાના ક્ષેત્રો)',
+    swotOpportunitiesLabel: 'તકો (બહારની શક્યતાઓ)',
+    swotThreatsLabel: 'પડકારો (બહારના જોખમો)',
+    riskFactorLabel: 'જોખમ પરિબળ',
+    likelihoodImpactLabel: 'સંભાવના / અસર',
+    mitigationStrategyLabel: 'નિવારણ વ્યૂહરચના',
+    monitoringIndicatorLabel: 'દેખરેખ સૂચક',
+    infrastructureAssessmentTitle: 'ઈન્ફ્રાસ્ટ્રક્ચર અને જમીની વાસ્તવિકતા મૂલ્યાંકન',
+    infrastructureFindingsTitle: 'ઈન્ફ્રાસ્ટ્રક્ચર તારણો અને ભલામણ કરેલ પગલાં',
+    businessImpactLabel: 'વ્યવસાય સંચાલન પર અસર',
+    recommendedActionsLabel: 'ભલામણ કરેલ વ્યવહારુ પગલાં',
+    operationalPriorityLabel: 'પ્રાથમિકતા',
+    supportOrganizationsTitle: 'સૂચિબદ્ધ સહાયક સંસ્થાઓ અને સ્થાનિક એનજીઓ',
+    learningVideosTitle: 'પસંદ કરેલ વિડિયો અને તાલીમ સંસાધનો',
+    actionPlanTitle: 'તબક્કાવાર વ્યાપાર અમલીકરણ કાર્ય યોજના (Action Plan)',
+    conclusionTitle: 'નિષ્કર્ષ અને વ્યૂહાત્મક સલાહકાર સારાંશ',
+    limitationsTitle: 'પદ્ધતિ અને સલાહકાર મર્યાદાઓ',
   },
 };

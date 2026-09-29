@@ -10,6 +10,8 @@ export const infrastructureResponseSchema = z.object({
 export const competitorEntrySchema = z.object({
   name: z.string().min(1, 'Competitor name or type is required'),
   distance: z.string().optional(),
+  distanceValue: z.number().nonnegative('Distance must be a non-negative number').optional().nullable(),
+  distanceUnit: z.enum(['m', 'km']).default('m').optional(),
   description: z.string().optional(),
 });
 
