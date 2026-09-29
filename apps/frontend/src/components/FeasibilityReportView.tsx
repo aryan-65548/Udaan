@@ -26,7 +26,6 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
-  Bot,
   HelpCircle,
   Truck,
   Zap,
@@ -36,7 +35,9 @@ import {
 
 import { getFeasibilityReport } from '../api/questionnaire';
 import { resolvePricingPillars } from '../utils/pricingPillars';
+import { calculateFundingBreakdown } from '../utils/financeCalculator';
 import { ReportGenerationLoading } from './ReportGenerationLoading';
+import { SahayakChatbot } from './SahayakChatbot';
 
 interface FeasibilityReportViewProps {
   report?: FeasibilityReportData | null;
@@ -208,6 +209,7 @@ export const FeasibilityReportView: React.FC<FeasibilityReportViewProps> = ({
     { id: 'videos', label: t.section10Nav || '10. Learning Resources' },
     { id: 'action', label: t.section11Nav || '11. Action Plan' },
     { id: 'conclusion', label: t.section12Nav || '12. Conclusion' },
+    { id: 'sahayak-chat', label: language === 'hi' ? '💬 सहायक गाइड' : language === 'gu' ? '💬 સહાયક માર્ગદર્શક' : '💬 Sahayak Guide' },
   ];
 
   const scrollToSection = (id: string) => {
@@ -218,16 +220,12 @@ export const FeasibilityReportView: React.FC<FeasibilityReportViewProps> = ({
     }
   };
 
-  // Financial reconciliation & 10% own contribution checks
-  const projectCost = financialFeasibility?.projectCost || 0;
-  const ownContribution = financialFeasibility?.ownContribution || 0;
-  const required10Percent = financialFeasibility?.requiredOwnContribution !== undefined && financialFeasibility?.requiredOwnContribution !== null
-    ? financialFeasibility.requiredOwnContribution
-    : Math.round(projectCost * 0.10);
-  const shortfall = financialFeasibility?.shortfall !== undefined
-    ? financialFeasibility.shortfall
-    : Math.max(0, required10Percent - ownContribution);
-  const isMarginCompliant = shortfall === 0;
+  // Financial reconciliation & 10% own contribution checks (Single Shared Calculation)
+  const funding = calculateFundingBreakdown(
+    financialFeasibility?.projectCost || 3500000,
+    financialFeasibility?.ownContribution || 300000,
+    Number(financialFeasibility?.financingPercentage) || 90
+  );
 
   // Safe fallback for infrastructure recommendations
   const infraActionItems = infrastructureAssessment?.actionableRecommendations || [
@@ -1123,40 +1121,40 @@ export const FeasibilityReportView: React.FC<FeasibilityReportViewProps> = ({
                   <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#ffffff' }}>
                     <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0f172a' }}>Total Project Cost</td>
                     <td style={{ padding: '12px 14px', fontWeight: 800, color: '#0b132b', fontSize: '1rem' }}>
-                      ₹{(projectCost || 0).toLocaleString('en-IN')}
+                      ₹{funding.projectCost.toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '12px 14px', color: '#64748b' }}>Financing Scheme</td>
                     <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0b132b' }}>
-                      {financialFeasibility.schemeName || 'Term Loan Scheme'}
+                      {financialFeasibility.schemeName || (funding.projectCost <= 140000 ? 'Micro Finance Scheme' : 'Term Loan Scheme')}
                     </td>
                   </tr>
 
                   <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#334155' }}>Maximum Scheme Financing</td>
                     <td style={{ padding: '12px 14px', fontWeight: 700, color: '#2563eb' }}>
-                      ₹{(financialFeasibility.maximumSchemeFinancing || Math.round(projectCost * 0.9)).toLocaleString('en-IN')} (90%)
+                      ₹{funding.maximumEligibleLoan.toLocaleString('en-IN')} ({financialFeasibility.financingPercentage || 90}%)
                     </td>
                     <td style={{ padding: '12px 14px', color: '#64748b' }}>Scheme Loan Cap</td>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0f172a' }}>
-                      ₹{(financialFeasibility.schemeLoanCap || 4500000).toLocaleString('en-IN')}
+                      ₹{(financialFeasibility.schemeLoanCap || (funding.projectCost <= 140000 ? 125000 : 4500000)).toLocaleString('en-IN')}
                     </td>
                   </tr>
 
                   <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#ffffff' }}>
-                    <td style={{ padding: '12px 14px', fontWeight: 700, color: '#059669' }}>Final Eligible Loan</td>
+                    <td style={{ padding: '12px 14px', fontWeight: 700, color: '#059669' }}>Final Eligible Bank Loan</td>
                     <td style={{ padding: '12px 14px', fontWeight: 800, color: '#059669', fontSize: '1.05rem' }}>
-                      ₹{(financialFeasibility.finalEligibleLoan || financialFeasibility.baseLoanAmount || 3330000).toLocaleString('en-IN')}
+                      ₹{(financialFeasibility.finalEligibleLoan || funding.eligibleLoanAmount).toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '12px 14px', color: '#64748b' }}>Annual Interest Rate</td>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0f172a' }}>
-                      {financialFeasibility.annualInterestRate || '8.0%'} (Fixed)
+                      {financialFeasibility.annualInterestRate || (funding.projectCost <= 140000 ? '6.5%' : '8.0%')} (Fixed)
                     </td>
                   </tr>
 
                   <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#334155' }}>Required Own Contribution (10%)</td>
                     <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0b132b' }}>
-                      ₹{(financialFeasibility.requiredOwnContribution || 370000).toLocaleString('en-IN')}
+                      ₹{funding.requiredOwnContribution.toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '12px 14px', color: '#64748b' }}>Repayment Frequency</td>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0f172a' }}>
@@ -1166,36 +1164,40 @@ export const FeasibilityReportView: React.FC<FeasibilityReportViewProps> = ({
 
                   <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#ffffff' }}>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#334155' }}>Applicant's Own Contribution</td>
-                    <td style={{ padding: '12px 14px', fontWeight: 700, color: isMarginCompliant ? '#059669' : '#d97706' }}>
-                      ₹{(ownContribution || 0).toLocaleString('en-IN')} ({financialFeasibility.actualContributionPercentage || 8.11}%)
+                    <td style={{ padding: '12px 14px', fontWeight: 700, color: funding.isMarginCompliant ? '#059669' : '#d97706' }}>
+                      ₹{funding.ownContribution.toLocaleString('en-IN')} ({funding.actualContributionPercentage}%)
                     </td>
                     <td style={{ padding: '12px 14px', color: '#64748b' }}>Tenure & Moratorium</td>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0f172a' }}>
-                      {financialFeasibility.totalTenureMonths || 84} Mo Total ({financialFeasibility.moratoriumMonths || 6} Mo Moratorium)
+                      {financialFeasibility.totalTenureMonths || (funding.projectCost <= 140000 ? 36 : 84)} Mo Total ({financialFeasibility.moratoriumMonths ?? (funding.projectCost <= 140000 ? 3 : 6)} Mo Moratorium)
                     </td>
                   </tr>
 
                   <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                    <td style={{ padding: '12px 14px', fontWeight: 700, color: isMarginCompliant ? '#059669' : '#dc2626' }}>
-                      Contribution Shortfall
+                    <td style={{ padding: '12px 14px', fontWeight: 700, color: funding.isMarginCompliant ? '#059669' : '#dc2626' }}>
+                      Contribution Shortfall / Excess
                     </td>
-                    <td style={{ padding: '12px 14px', fontWeight: 800, color: isMarginCompliant ? '#059669' : '#dc2626' }}>
-                      {(shortfall ?? 0) > 0 ? `₹${(shortfall ?? 0).toLocaleString('en-IN')}` : '₹0 (Requirement Met)'}
+                    <td style={{ padding: '12px 14px', fontWeight: 800, color: funding.isMarginCompliant ? '#059669' : '#dc2626' }}>
+                      {funding.shortfall > 0
+                        ? `₹${funding.shortfall.toLocaleString('en-IN')} Shortfall`
+                        : funding.excessContribution > 0
+                        ? `₹0 Shortfall (+₹${funding.excessContribution.toLocaleString('en-IN')} excess)`
+                        : '₹0 (Requirement Met)'}
                     </td>
                     <td style={{ padding: '12px 14px', color: '#64748b' }}>Active Repayment Periods</td>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0f172a' }}>
-                      {financialFeasibility.activeRepaymentsCount || 26} Quarterly Installments ({financialFeasibility.activeRepaymentPeriodMonths || 78} Months)
+                      {financialFeasibility.activeRepaymentsCount || (funding.projectCost <= 140000 ? 11 : 26)} Quarterly Installments ({financialFeasibility.activeRepaymentMonths || (funding.projectCost <= 140000 ? 33 : 78)} Months)
                     </td>
                   </tr>
 
                   <tr style={{ borderBottom: '1px solid #e2e8f0', background: '#ffffff' }}>
-                    <td style={{ padding: '12px 14px', fontWeight: 600, color: '#64748b' }}>Requested Funding Gap</td>
+                    <td style={{ padding: '12px 14px', fontWeight: 600, color: '#64748b' }}>Actual Loan Requirement</td>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#64748b' }}>
-                      ₹{(financialFeasibility.requestedFundingGap || 3400003).toLocaleString('en-IN')}
+                      ₹{funding.actualLoanRequirement.toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding: '12px 14px', color: '#64748b' }}>Quarterly Installment</td>
                     <td style={{ padding: '12px 14px', fontWeight: 700, color: '#7c3aed' }}>
-                      ₹{Number(financialFeasibility.installmentAmount || 166667).toLocaleString('en-IN')}
+                      ₹{Number(financialFeasibility.installmentAmount || (funding.projectCost <= 140000 ? 10600 : 156590)).toLocaleString('en-IN')}
                     </td>
                   </tr>
                 </tbody>
@@ -1206,103 +1208,122 @@ export const FeasibilityReportView: React.FC<FeasibilityReportViewProps> = ({
             <div
               style={{
                 marginBottom: '28px',
-                background: isMarginCompliant ? 'rgba(6, 214, 160, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                border: `1px solid ${isMarginCompliant ? 'rgba(6, 214, 160, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                background: funding.isMarginCompliant ? 'rgba(6, 214, 160, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                border: `1px solid ${funding.isMarginCompliant ? 'rgba(6, 214, 160, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
                 padding: '18px 22px',
                 borderRadius: '12px',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {isMarginCompliant ? (
+                  {funding.isMarginCompliant ? (
                     <CheckCircle2 size={20} color="#059669" />
                   ) : (
                     <AlertTriangle size={20} color="#dc2626" />
                   )}
-                  <span style={{ fontWeight: 800, fontSize: '0.95rem', color: isMarginCompliant ? '#059669' : '#dc2626' }}>
-                    {isMarginCompliant
+                  <span style={{ fontWeight: 800, fontSize: '0.95rem', color: funding.isMarginCompliant ? '#059669' : '#dc2626' }}>
+                    {funding.isMarginCompliant
                       ? '✓ Meets 10% Minimum Own Contribution Requirement'
-                      : `Contribution requirement not yet met — Margin Shortfall of ₹${(shortfall ?? 0).toLocaleString('en-IN')}`}
+                      : `Contribution requirement not yet met — Margin Shortfall of ₹${funding.shortfall.toLocaleString('en-IN')}`}
                   </span>
                 </div>
                 <span style={{ fontSize: '0.84rem', color: '#64748b' }}>
-                  Required (10%): ₹{(financialFeasibility.requiredOwnContribution || 370000).toLocaleString('en-IN')} | Actual: ₹{(ownContribution || 0).toLocaleString('en-IN')} ({financialFeasibility.actualContributionPercentage || 8.11}%)
+                  Required (10%): ₹{funding.requiredOwnContribution.toLocaleString('en-IN')} | Actual: ₹{funding.ownContribution.toLocaleString('en-IN')} ({funding.actualContributionPercentage}%)
                 </span>
               </div>
               <p style={{ margin: '4px 0 0', fontSize: '0.86rem', color: '#475569', lineHeight: 1.5 }}>
-                {isMarginCompliant
-                  ? 'The applicant satisfies the institutional margin requirements.'
-                  : `The applicant currently provides ₹${(ownContribution || 0).toLocaleString('en-IN')} (~${financialFeasibility.actualContributionPercentage || 8.11}%), leaving a ₹${(shortfall || 70003).toLocaleString('en-IN')} shortfall before the full 90% scheme loan (₹33,30,000) can be disbursed by the lending institution.`}
+                {funding.isMarginCompliant
+                  ? `The applicant satisfies the institutional margin requirements with ₹${funding.ownContribution.toLocaleString('en-IN')} (${funding.actualContributionPercentage}% of project outlay).`
+                  : `The applicant currently provides ₹${funding.ownContribution.toLocaleString('en-IN')} (${funding.actualContributionPercentage}%), leaving a ₹${funding.shortfall.toLocaleString('en-IN')} shortfall before the full 90% scheme loan (₹${funding.maximumEligibleLoan.toLocaleString('en-IN')}) can be disbursed by the lending institution.`}
               </p>
             </div>
 
-            {/* VISUAL 1: FUNDING STRUCTURE CHART */}
-            <div style={{ marginBottom: '32px', background: '#f8fafc', padding: '24px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+            {/* VISUAL 1: FUNDING STRUCTURE STACKED BAR */}
+            <div style={{ marginBottom: '28px', background: '#f8fafc', padding: '24px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
                 <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0b132b' }}>
                   Visual 1: Project Outlay & Funding Composition
                 </h4>
-                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Deterministic Values</span>
+                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Configured Demo Assumption (90% Max Financing)</span>
               </div>
 
               {/* Stacked Horizontal Visualization Bar */}
-              <div style={{ height: '36px', display: 'flex', borderRadius: '8px', overflow: 'hidden', background: '#e2e8f0', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)', marginBottom: '12px' }}>
-                <div
-                  style={{
-                    width: '90%',
-                    background: 'linear-gradient(90deg, #2563eb, #3b82f6)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                  }}
-                  title="Final Eligible Bank Loan (90%): ₹33,30,000"
-                >
-                  Eligible Bank Loan (90%): ₹{(financialFeasibility.finalEligibleLoan || 3330000).toLocaleString('en-IN')}
-                </div>
-                <div
-                  style={{
-                    width: '8.11%',
-                    background: '#06d6a0',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#064e3b',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                  }}
-                  title="Actual Own Contribution: ₹2,99,997 (8.11%)"
-                >
-                  Own: 8.1%
-                </div>
-                <div
-                  style={{
-                    width: '1.89%',
-                    background: '#ef4444',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#ffffff',
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                  }}
-                  title="Shortfall: ₹70,003 (1.89%)"
-                >
-                  !
-                </div>
-              </div>
+              {(() => {
+                const total = funding.projectCost || 1;
+                const loanPct = Math.min(100, Math.round(((financialFeasibility.finalEligibleLoan || funding.eligibleLoanAmount) / total) * 10000) / 100);
+                const ownPct = Math.min(100, Math.round((funding.ownContribution / total) * 10000) / 100);
+                const shortfallPct = Math.max(0, Math.round((funding.shortfall / total) * 10000) / 100);
+
+                return (
+                  <div style={{ height: '36px', display: 'flex', borderRadius: '8px', overflow: 'hidden', background: '#e2e8f0', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)', marginBottom: '12px' }}>
+                    <div
+                      style={{
+                        width: `${loanPct}%`,
+                        background: 'linear-gradient(90deg, #2563eb, #3b82f6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ffffff',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        padding: '0 8px',
+                      }}
+                      title={`Eligible Bank Loan: ₹${(financialFeasibility.finalEligibleLoan || funding.eligibleLoanAmount).toLocaleString('en-IN')} (${loanPct}%)`}
+                    >
+                      Eligible Loan: ₹{(financialFeasibility.finalEligibleLoan || funding.eligibleLoanAmount).toLocaleString('en-IN')} ({loanPct}%)
+                    </div>
+                    <div
+                      style={{
+                        width: `${ownPct}%`,
+                        background: '#06d6a0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#064e3b',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        padding: '0 6px',
+                      }}
+                      title={`Own Contribution: ₹${funding.ownContribution.toLocaleString('en-IN')} (${ownPct}%)`}
+                    >
+                      Own: {ownPct}%
+                    </div>
+                    {shortfallPct > 0 && (
+                      <div
+                        style={{
+                          width: `${shortfallPct}%`,
+                          background: '#ef4444',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#ffffff',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                        }}
+                        title={`Shortfall: ₹${funding.shortfall.toLocaleString('en-IN')} (${shortfallPct}%)`}
+                      >
+                        !
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Legend & Breakdown Chips */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginTop: '12px' }}>
                 <div style={{ background: '#ffffff', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
                     <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#2563eb' }} />
-                    Eligible Scheme Loan (90%)
+                    Eligible Bank Loan
                   </div>
                   <div style={{ fontSize: '1rem', fontWeight: 800, color: '#2563eb', marginTop: '2px' }}>
-                    ₹{(financialFeasibility.finalEligibleLoan || 3330000).toLocaleString('en-IN')}
+                    ₹{(financialFeasibility.finalEligibleLoan || funding.eligibleLoanAmount).toLocaleString('en-IN')}
                   </div>
                 </div>
 
@@ -1312,37 +1333,80 @@ export const FeasibilityReportView: React.FC<FeasibilityReportViewProps> = ({
                     Required Contribution (10%)
                   </div>
                   <div style={{ fontSize: '1rem', fontWeight: 800, color: '#059669', marginTop: '2px' }}>
-                    ₹{(financialFeasibility.requiredOwnContribution || 370000).toLocaleString('en-IN')}
+                    ₹{funding.requiredOwnContribution.toLocaleString('en-IN')}
                   </div>
                 </div>
 
                 <div style={{ background: '#ffffff', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
                     <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#06d6a0' }} />
-                    Actual Contribution ({financialFeasibility.actualContributionPercentage || 8.11}%)
+                    Actual Contribution ({funding.actualContributionPercentage}%)
                   </div>
                   <div style={{ fontSize: '1rem', fontWeight: 800, color: '#0f172a', marginTop: '2px' }}>
-                    ₹{(ownContribution || 299997).toLocaleString('en-IN')}
+                    ₹{funding.ownContribution.toLocaleString('en-IN')}
                   </div>
                 </div>
 
                 <div style={{ background: '#ffffff', padding: '12px 14px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: '#dc2626', fontWeight: 600 }}>
-                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444' }} />
-                    Contribution Shortfall
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem', color: funding.isMarginCompliant ? '#059669' : '#dc2626', fontWeight: 600 }}>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: funding.isMarginCompliant ? '#059669' : '#ef4444' }} />
+                    {funding.isMarginCompliant ? 'Margin Status' : 'Contribution Shortfall'}
                   </div>
-                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#dc2626', marginTop: '2px' }}>
-                    ₹{(shortfall || 70003).toLocaleString('en-IN')}
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color: funding.isMarginCompliant ? '#059669' : '#dc2626', marginTop: '2px' }}>
+                    {funding.isMarginCompliant ? '✓ 10% Met' : `₹${funding.shortfall.toLocaleString('en-IN')}`}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* DSCR & CASH FLOW CAPACITY SECTION */}
+            {/* VISUAL 2: CONTRIBUTION THRESHOLD COMPARISON */}
+            <div style={{ marginBottom: '28px', background: '#f8fafc', padding: '20px 24px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+                <h4 style={{ margin: 0, fontSize: '0.98rem', fontWeight: 700, color: '#0b132b' }}>
+                  Visual 2: Own Contribution Threshold Comparison (10.0% Minimum Target vs Actual)
+                </h4>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: funding.isMarginCompliant ? '#059669' : '#dc2626' }}>
+                  {funding.isMarginCompliant ? '✓ Threshold Satisfied' : `Shortfall: ₹${funding.shortfall.toLocaleString('en-IN')}`}
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Minimum Required Target (10.0%)</span>
+                    <strong style={{ color: '#0b132b' }}>₹{funding.requiredOwnContribution.toLocaleString('en-IN')}</strong>
+                  </div>
+                  <div style={{ height: '10px', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: '100%', background: '#059669', borderRadius: '6px' }} />
+                  </div>
+                </div>
+
+                <div style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
+                    <span style={{ color: '#64748b', fontWeight: 600 }}>Actual Provided ({funding.actualContributionPercentage}%)</span>
+                    <strong style={{ color: funding.isMarginCompliant ? '#059669' : '#dc2626' }}>
+                      ₹{funding.ownContribution.toLocaleString('en-IN')}
+                    </strong>
+                  </div>
+                  <div style={{ height: '10px', background: '#e2e8f0', borderRadius: '6px', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${Math.min(100, Math.round((funding.actualContributionPercentage / 10) * 100))}%`,
+                        background: funding.isMarginCompliant ? '#06d6a0' : '#ef4444',
+                        borderRadius: '6px',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* VISUAL 3: DSCR & CASH FLOW CAPACITY SECTION */}
             <div style={{ marginBottom: '28px', background: '#f8fafc', padding: '24px', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
                 <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0b132b' }}>
-                  Debt Service Coverage Ratio (DSCR) & Cash Flow Capacity
+                  Visual 3: Debt Service Coverage Ratio (DSCR) & Cash Flow Capacity
                 </h4>
                 {financialFeasibility.dscrIsIllustrative && (
                   <span style={{ background: '#fef3c7', color: '#b45309', padding: '4px 10px', borderRadius: '12px', fontSize: '0.74rem', fontWeight: 700 }}>
@@ -1376,7 +1440,7 @@ export const FeasibilityReportView: React.FC<FeasibilityReportViewProps> = ({
                     </div>
 
                     <div style={{ background: '#ffffff', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                      <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>Annual Debt Service (Installment × 4)</div>
+                      <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>Annual Debt Service</div>
                       <div style={{ fontSize: '1rem', fontWeight: 700, color: '#2563eb', marginTop: '2px' }}>
                         ₹{financialFeasibility.demoCashFlow.annualDebtService.toLocaleString('en-IN')}
                       </div>
@@ -1396,18 +1460,18 @@ export const FeasibilityReportView: React.FC<FeasibilityReportViewProps> = ({
                 </div>
               ) : (
                 <p style={{ margin: 0, fontSize: '0.86rem', color: '#64748b', lineHeight: 1.5 }}>
-                  {financialFeasibility.dscrExplanation || 'Awaiting actual operating revenue and cost inputs from the entrepreneur.'}
+                  {financialFeasibility.dscrExplanation || 'DSCR unavailable — cash-flow inputs required.'}
                 </p>
               )}
             </div>
 
-            {/* VISUAL 2: REPAYMENT SCHEDULE & AMORTIZATION OVERVIEW */}
+            {/* VISUAL 4: REPAYMENT SCHEDULE & AMORTIZATION OVERVIEW */}
             {financialFeasibility.repaymentSchedule && financialFeasibility.repaymentSchedule.length > 0 ? (
               <div style={{ marginTop: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
                   <div>
                     <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#0b132b' }}>
-                      Visual 2: Repayment Amortization Schedule (28 Periods: 2 Moratorium + 26 Active)
+                      Visual 4: Repayment Amortization Schedule ({financialFeasibility.repaymentSchedule.length} Quarterly Periods)
                     </h4>
                     <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
                       Quarterly installments reconciled to ₹0.00 closing principal
@@ -1440,23 +1504,23 @@ export const FeasibilityReportView: React.FC<FeasibilityReportViewProps> = ({
                 {/* Schedule Summary Bar */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '16px' }}>
                   <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>Quarterly Installment (Q3–Q28)</div>
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>Quarterly Installment</div>
                     <div style={{ fontSize: '1rem', fontWeight: 800, color: '#7c3aed' }}>
-                      ₹{Number(financialFeasibility.installmentAmount || 166667).toLocaleString('en-IN')}
+                      ₹{Number(financialFeasibility.installmentAmount || (funding.projectCost <= 140000 ? 10600 : 156590)).toLocaleString('en-IN')}
                     </div>
                   </div>
 
                   <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>Moratorium Interest (Q1–Q2)</div>
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>Moratorium Interest</div>
                     <div style={{ fontSize: '1rem', fontWeight: 800, color: '#2563eb' }}>
-                      ₹{Number(financialFeasibility.repaymentSchedule[0]?.interestPayment || 66600).toLocaleString('en-IN')} / quarter
+                      ₹{Number(financialFeasibility.repaymentSchedule[0]?.interestPayment || (funding.projectCost <= 140000 ? 1723 : 63000)).toLocaleString('en-IN')} / quarter
                     </div>
                   </div>
 
                   <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>Total Repayment Over 84 Mo</div>
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', fontWeight: 600 }}>Total Repayment</div>
                     <div style={{ fontSize: '1rem', fontWeight: 800, color: '#059669' }}>
-                      ₹{financialFeasibility.totalRepaymentAmount ? Number(financialFeasibility.totalRepaymentAmount).toLocaleString('en-IN') : '₹44,66,540'}
+                      ₹{financialFeasibility.totalRepayment ? Number(financialFeasibility.totalRepayment).toLocaleString('en-IN') : (funding.projectCost <= 140000 ? '1,18,326' : '41,97,330')}
                     </div>
                   </div>
                 </div>
@@ -2447,76 +2511,8 @@ export const FeasibilityReportView: React.FC<FeasibilityReportViewProps> = ({
             </div>
           </div>
 
-          {/* POST-REPORT INTERACTION: SAHAYAK CHAT TEASER (COMING SOON) */}
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #1c2541 0%, #0f172a 100%)',
-              border: '1px solid rgba(6, 214, 160, 0.25)',
-              borderRadius: '24px',
-              padding: '36px',
-              textAlign: 'center',
-              boxShadow: '0 12px 28px rgba(0, 0, 0, 0.3)',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '48px',
-                height: '48px',
-                borderRadius: '50%',
-                background: 'rgba(6, 214, 160, 0.15)',
-                color: '#06d6a0',
-                marginBottom: '12px',
-              }}
-            >
-              <Bot size={26} />
-            </div>
-
-            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#ffffff', marginBottom: '6px' }}>
-              {language === 'hi'
-                ? 'क्या आप इस रिपोर्ट के बारे में कुछ और पूछना चाहते हैं?'
-                : language === 'gu'
-                ? 'શું તમને આ રિપોર્ટ વિશે વધુ પ્રશ્નો છે?'
-                : 'Have more questions about your report?'}
-            </h3>
-            <p style={{ color: '#94a3b8', fontSize: '0.92rem', maxWidth: '540px', margin: '0 auto 20px', lineHeight: 1.5 }}>
-              {language === 'hi'
-                ? 'सहायक चैट सहायक आपको वित्तीय गणनाओं, आपूर्तिकर्ता विकल्पों और ऋण आवेदनों पर सीधा मार्गदर्शन प्रदान करेगा।'
-                : language === 'gu'
-                ? 'સહાયક ચેટ સહાયક તમને નાણાકીય ગણતરીઓ, સપ્લાયર્સ અને લોન અરજીઓ પર સીધું માર્ગદર્શન આપશે.'
-                : 'Ask Sahayak will allow you to query your financial calculations, explore supplier alternatives, and get instant guidance on loan applications.'}
-            </p>
-
-            <button
-              type="button"
-              disabled
-              style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                color: '#94a3b8',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                padding: '11px 26px',
-                borderRadius: '10px',
-                fontWeight: 600,
-                fontSize: '0.9rem',
-                cursor: 'not-allowed',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
-              <Bot size={16} />
-              <span>
-                {language === 'hi'
-                  ? 'सहायक से इस रिपोर्ट के बारे में पूछें (शीघ्र उपलब्ध)'
-                  : language === 'gu'
-                  ? 'સહાયકને આ રિપોર્ટ વિશે પૂછો (ટૂંક સમયમાં ઉપલબ્ધ)'
-                  : 'Ask Sahayak about this report (Coming Soon)'}
-              </span>
-            </button>
-          </div>
+          {/* SAHAYAK CHATBOT: YOUR BUSINESS GUIDE */}
+          <SahayakChatbot language={language} />
         </div>
       </div>
     </div>

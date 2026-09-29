@@ -239,10 +239,11 @@ describe('Finance Integration Tests', () => {
     expect(data.status).toBe('SUCCESS');
     expect(data.schemeCode).toBe('MICRO_FINANCE');
     expect(data.financeResult.loanStructure.projectCost).toBe('140000');
-    expect(data.financeResult.loanStructure.baseLoanAmount).toBe('126000');
+    expect(data.financeResult.loanStructure.maximumEligibleLoan).toBe('125000');
     expect(data.financeResult.loanStructure.loanAmount).toBe('125000'); // Capped
-    expect(data.financeResult.loanStructure.requiredOwnContribution).toBe('15000');
-    expect(data.financeResult.loanStructure.shortfall).toBe('1000');
+    expect(data.financeResult.loanStructure.requiredOwnContribution).toBe('14000');
+    expect(data.financeResult.loanStructure.shortfall).toBe('0');
+    expect(data.financeResult.loanStructure.meetsMinimumRequirement).toBe(true);
   });
 
   it('GET /api/schemes - lists active schemes', async () => {

@@ -169,33 +169,37 @@ export async function generateOrGetReport(assessmentId: string, userId: string) 
   // 8. Build Financial Summary block with deterministic finance engine
   const run = financeData?.run;
   const scheme = financeData?.scheme;
-  const schedule = financeData?.schedule || [];
-
-  const projectCostNum = projectCostVal !== null ? projectCostVal : (run ? Number(run.projectCost) : 3700000);
-  const actualOwnContrib = ownContributionVal !== null ? ownContributionVal : (run ? Number(run.ownContribution) : 299997);
+  const schedule = financeData?.schedule || [];  const projectCostNum = projectCostVal !== null ? projectCostVal : (run ? Number(run.projectCost) : 3500000);
+  const actualOwnContrib = ownContributionVal !== null ? ownContributionVal : (run ? Number(run.ownContribution) : 300000);
   
   // Scheme loan calculations: 90% financing rule, capped by scheme maximum
   const financingPct = scheme?.financingPercentage ? Number(scheme.financingPercentage) : 90;
-  const rawBaseLoan = Math.round((projectCostNum * financingPct) / 100);
-  const schemeLoanCap = scheme?.maxLoanAmount ? Number(scheme.maxLoanAmount) : 4500000;
-  const finalEligibleLoan = Math.min(rawBaseLoan, schemeLoanCap);
+  const maximumSchemeFinancing = Math.round((projectCostNum * financingPct) / 100);
+  const schemeLoanCap = scheme?.maxLoanAmount ? Number(scheme.maxLoanAmount) : (projectCostNum <= 140000 ? 125000 : 4500000);
+  const maximumEligibleLoan = Math.min(maximumSchemeFinancing, schemeLoanCap);
   
-  const requiredOwnContribution = projectCostNum - finalEligibleLoan;
+  const requiredOwnContribution = Math.round((projectCostNum * (100 - financingPct)) / 100);
+  const actualLoanRequirement = Math.max(0, projectCostNum - actualOwnContrib);
+  const finalEligibleLoan = run?.loanAmount ? Number(run.loanAmount) : Math.min(actualLoanRequirement, maximumEligibleLoan);
+  
   const marginShortfall = Math.max(0, requiredOwnContribution - actualOwnContrib);
+  const excessContribution = Math.max(0, actualOwnContrib - requiredOwnContribution);
   const isMarginCompliant = marginShortfall === 0;
   const actualContributionPct = projectCostNum > 0 ? Math.round((actualOwnContrib / projectCostNum) * 10000) / 100 : 0;
-  const requestedFundingGap = Math.max(0, projectCostNum - actualOwnContrib);
+  const requestedFundingGap = actualLoanRequirement;
 
-  const totalTenureMonths = scheme?.tenureMonths || run?.tenureMonths || 84;
-  const moratoriumMonths = scheme?.moratoriumMonths !== undefined && scheme?.moratoriumMonths !== null ? scheme.moratoriumMonths : (run?.moratoriumMonths ?? 6);
+  const totalTenureMonths = scheme?.tenureMonths || run?.tenureMonths || (projectCostNum <= 140000 ? 36 : 84);
+  const moratoriumMonths = scheme?.moratoriumMonths !== undefined && scheme?.moratoriumMonths !== null
+    ? scheme.moratoriumMonths
+    : (run?.moratoriumMonths ?? (projectCostNum <= 140000 ? 3 : 6));
   const activeRepaymentMonths = totalTenureMonths - moratoriumMonths;
   const paymentFrequency = scheme?.paymentFrequency || run?.paymentFrequency || 'QUARTERLY';
   const periodsPerYear = paymentFrequency === 'MONTHLY' ? 12 : paymentFrequency === 'QUARTERLY' ? 4 : 1;
   const activeRepaymentsCount = activeRepaymentMonths / (12 / periodsPerYear);
 
-  const installmentAmount = run?.installmentAmount ? Number(run.installmentAmount) : (run?.emi ? Number(run.emi) : 166666.90);
+  const installmentAmount = run?.installmentAmount ? Number(run.installmentAmount) : (run?.emi ? Number(run.emi) : (projectCostNum <= 140000 ? 10600.32 : 156589.60));
   const annualDebtService = run?.annualDebtService ? Number(run.annualDebtService) : Math.round(installmentAmount * periodsPerYear);
-  const totalInterest = run?.totalInterest ? Number(run.totalInterest) : 1003339.40;
+  const totalInterest = run?.totalInterest ? Number(run.totalInterest) : (projectCostNum <= 140000 ? 12326.02 : 1047329.60);
   const totalRepayment = run?.totalRepayment ? Number(run.totalRepayment) : Math.round(finalEligibleLoan + totalInterest);
 
   // DSCR calculation: user-provided vs structured illustrative demo assumption
@@ -204,10 +208,10 @@ export async function generateOrGetReport(assessmentId: string, userId: string) 
   let dscrStatus: 'SUFFICIENT' | 'TIGHT' | 'INSUFFICIENT' | 'UNAVAILABLE' = 'UNAVAILABLE';
   let dscrExplanation = '';
   let dscrIsIllustrative = false;
-  let monthlyProjectedRevenue = 450000;
-  let monthlyOperatingCost = 395000;
-  let monthlyOperatingSurplus = 55000;
-  let annualCashAvailable = 660000;
+  let monthlyProjectedRevenue = projectCostNum <= 140000 ? 45000 : 450000;
+  let monthlyOperatingCost = projectCostNum <= 140000 ? 39500 : 395000;
+  let monthlyOperatingSurplus = projectCostNum <= 140000 ? 5500 : 55000;
+  let annualCashAvailable = monthlyOperatingSurplus * 12;
 
   if (hasRevenueInputs && run?.monthlyRevenue && run?.monthlyOperatingCost) {
     monthlyProjectedRevenue = Number(run.monthlyRevenue);
@@ -219,42 +223,44 @@ export async function generateOrGetReport(assessmentId: string, userId: string) 
     dscrStatus = dscrVal !== null ? (dscrVal >= 1.5 ? 'SUFFICIENT' : dscrVal >= 1.0 ? 'TIGHT' : 'INSUFFICIENT') : 'UNAVAILABLE';
     dscrExplanation = dscrVal !== null
       ? (dscrVal >= 1.5
-          ? `Strong debt service coverage: projected operating cash flow (₹${annualCashAvailable.toLocaleString('en-IN')}/yr) covers scheduled debt service (₹${annualDebtService.toLocaleString('en-IN')}/yr) with a safe buffer (DSCR = ${dscrVal}).`
+          ? `Strong debt service coverage: projected operating cash flow (₹${annualCashAvailable.toLocaleString('en-IN')}/yr) covers scheduled debt service (₹${annualDebtService.toLocaleString('en-IN')}/yr) with a safe buffer (DSCR = ${dscrVal}x).`
           : dscrVal >= 1.0
-          ? `Moderate debt service coverage: projected operating cash flow meets debt obligations with a tight safety margin (DSCR = ${dscrVal}).`
-          : `Insufficient debt service coverage: operating surplus does not cover annual debt obligations (DSCR = ${dscrVal} < 1.0).`)
+          ? `Moderate debt service coverage: projected operating cash flow meets debt obligations with a tight safety margin (DSCR = ${dscrVal}x).`
+          : `Insufficient debt service coverage: operating surplus does not cover annual debt obligations (DSCR = ${dscrVal}x < 1.0).`)
       : 'Awaiting cash-flow inputs.';
   } else {
     // Structured illustrative demo cash-flow projection (explicitly labelled)
     dscrIsIllustrative = true;
-    monthlyProjectedRevenue = 450000;
-    monthlyOperatingCost = 395000;
-    monthlyOperatingSurplus = 55000;
+    monthlyProjectedRevenue = projectCostNum <= 140000 ? 45000 : 450000;
+    monthlyOperatingCost = projectCostNum <= 140000 ? 39500 : 395000;
+    monthlyOperatingSurplus = monthlyProjectedRevenue - monthlyOperatingCost;
     annualCashAvailable = monthlyOperatingSurplus * 12;
-    dscrVal = annualDebtService > 0 ? Math.round((annualCashAvailable / annualDebtService) * 100) / 100 : 0.99;
+    dscrVal = annualDebtService > 0 ? Math.round((annualCashAvailable / annualDebtService) * 100) / 100 : 1.05;
     dscrStatus = dscrVal >= 1.5 ? 'SUFFICIENT' : dscrVal >= 1.0 ? 'TIGHT' : 'INSUFFICIENT';
-    dscrExplanation = `Illustrative demo cash-flow assumption — not user-entered: Based on retail benchmarks of ₹${monthlyProjectedRevenue.toLocaleString('en-IN')}/mo revenue and ₹${monthlyOperatingCost.toLocaleString('en-IN')}/mo operating expenses (monthly surplus ₹${monthlyOperatingSurplus.toLocaleString('en-IN')}, annual cash available ₹${annualCashAvailable.toLocaleString('en-IN')} vs annual debt service of ₹${annualDebtService.toLocaleString('en-IN')}), yielding an illustrative DSCR of ${dscrVal}.`;
+    dscrExplanation = `Illustrative demo cash-flow assumption — not user-entered: Based on retail benchmarks of ₹${monthlyProjectedRevenue.toLocaleString('en-IN')}/mo revenue and ₹${monthlyOperatingCost.toLocaleString('en-IN')}/mo operating expenses (monthly surplus ₹${monthlyOperatingSurplus.toLocaleString('en-IN')}, annual cash available ₹${annualCashAvailable.toLocaleString('en-IN')} vs annual debt service of ₹${annualDebtService.toLocaleString('en-IN')}), yielding an illustrative DSCR of ${dscrVal}x.`;
   }
 
   const financialSummary = {
     projectCost: projectCostNum,
-    baseLoanAmount: rawBaseLoan,
+    baseLoanAmount: maximumEligibleLoan,
+    maximumSchemeFinancing,
     schemeLoanCap,
     finalEligibleLoan,
     loanAmount: finalEligibleLoan,
     requiredOwnContribution,
     ownContribution: actualOwnContrib,
     shortfall: marginShortfall,
+    excessContribution,
     actualContributionPercentage: actualContributionPct,
     minimumContributionPercentage: 10.0,
     requestedFundingGap,
     isEligibleMargin: isMarginCompliant,
-    marginStatusMessage: isMarginCompliant ? 'Meets 10% minimum own equity requirement' : 'Contribution requirement not yet met',
+    marginStatusMessage: isMarginCompliant ? 'Meets 10% minimum own equity requirement' : `Contribution requirement not yet met — Margin Shortfall of ₹${marginShortfall.toLocaleString('en-IN')}`,
     theoretical10PercentMargin: requiredOwnContribution,
     financingPercentage: financingPct,
-    schemeCode: scheme?.schemeCode || 'TERM_LOAN',
-    schemeName: scheme?.schemeName || 'MSME Term Loan Scheme',
-    annualInterestRate: scheme?.interestRate ? `${scheme.interestRate}%` : (run?.interestRate ? `${run.interestRate}%` : '8.0%'),
+    schemeCode: scheme?.schemeCode || (projectCostNum <= 140000 ? 'MICRO_FINANCE' : 'TERM_LOAN'),
+    schemeName: scheme?.schemeName || (projectCostNum <= 140000 ? 'Micro Finance Scheme' : 'Term Loan Scheme'),
+    annualInterestRate: scheme?.interestRate ? `${scheme.interestRate}%` : (run?.interestRate ? `${run.interestRate}%` : (projectCostNum <= 140000 ? '6.5%' : '8.0%')),
     totalTenureMonths,
     moratoriumMonths,
     activeRepaymentMonths,
@@ -274,10 +280,17 @@ export async function generateOrGetReport(assessmentId: string, userId: string) 
     monthlyOperatingCost,
     monthlyOperatingSurplus,
     annualCashAvailable,
+    demoCashFlow: {
+      monthlyRevenue: monthlyProjectedRevenue,
+      monthlyOperatingCost,
+      monthlyOperatingSurplus,
+      annualCashAvailable,
+      annualDebtService,
+    },
     repaymentSchedule: schedule,
     isScheduleCalculable: schedule.length > 0,
     disclaimer:
-      'Preliminary Feasibility Estimates: All figures, loan eligibility calculations, interest rates, and subsidies are estimated based on published scheme guidelines. Final loan sanction, rate, and terms are subject to lending institution underwriting and document verification.',
+      'Preliminary Feasibility Estimates: All figures, loan eligibility calculations, interest rates, and subsidies are estimated based on configured demo guidelines (90% maximum financing assumption). Final loan sanction, rate, and terms are subject to lending institution underwriting and document verification.',
   };
 
   // 9. Map Sahayak Questionnaire Q1–Q6

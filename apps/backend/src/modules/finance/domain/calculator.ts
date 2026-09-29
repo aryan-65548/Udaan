@@ -24,7 +24,12 @@ export interface LoanStructure {
   projectCost: Decimal;
   availableMarginCapital: Decimal;
   requiredOwnContribution: Decimal;
+  maximumEligibleLoan: Decimal;
+  actualLoanRequirement: Decimal;
   shortfall: Decimal;
+  excessContribution: Decimal;
+  actualContributionPercentage: Decimal;
+  meetsMinimumRequirement: boolean;
   baseLoanAmount: Decimal;
   loanAmount: Decimal;
   theoretical10PercentMargin: Decimal;
@@ -77,37 +82,54 @@ export function calculateLoanStructure(inputs: FinancialInputs, scheme: SchemeCo
     : new Decimal(90);
 
   const rawBaseLoan = projectCost.mul(finPct).div(100);
-  let baseLoanAmount = rawBaseLoan;
+  let maximumEligibleLoan = rawBaseLoan;
 
   if (scheme.maxLoanAmount !== null && scheme.maxLoanAmount !== undefined) {
     const maxLoan = new Decimal(scheme.maxLoanAmount);
-    if (baseLoanAmount.gt(maxLoan)) {
-      baseLoanAmount = maxLoan;
+    if (maximumEligibleLoan.gt(maxLoan)) {
+      maximumEligibleLoan = maxLoan;
     }
   }
 
-  if (baseLoanAmount.lt(0)) {
-    baseLoanAmount = new Decimal(0);
+  if (maximumEligibleLoan.lt(0)) {
+    maximumEligibleLoan = new Decimal(0);
   }
 
-  // Actual required own contribution based on final loan
-  const requiredOwnContribution = projectCost.minus(baseLoanAmount);
+  // Required contribution = 10% of total project cost (or projectCost - maximumEligibleLoan)
+  const requiredOwnContribution = projectCost.mul(new Decimal(100).minus(finPct)).div(100);
 
-  // Shortfall = required - available
-  let shortfall = requiredOwnContribution.minus(availableMarginCapital);
-  if (shortfall.lt(0)) {
-    shortfall = new Decimal(0);
-  }
+  // Actual loan requirement = max(0, totalProjectCost - ownContribution)
+  const actualLoanRequirement = Decimal.max(0, projectCost.minus(availableMarginCapital));
+
+  // Eligible loan amount = min(actualLoanRequirement, maximumEligibleLoan)
+  const eligibleLoanAmount = Decimal.min(actualLoanRequirement, maximumEligibleLoan);
+
+  // Contribution shortfall = max(0, requiredContribution - ownContribution)
+  const contributionShortfall = Decimal.max(0, requiredOwnContribution.minus(availableMarginCapital));
+
+  // Excess contribution = max(0, ownContribution - requiredContribution)
+  const excessContribution = Decimal.max(0, availableMarginCapital.minus(requiredOwnContribution));
+
+  // Actual contribution percentage = (ownContribution / totalProjectCost) * 100
+  const actualContributionPercentage = projectCost.gt(0)
+    ? availableMarginCapital.div(projectCost).mul(100)
+    : new Decimal(0);
 
   const theoretical10PercentMargin = projectCost.mul(0.10);
+  const meetsMinimumRequirement = contributionShortfall.isZero();
 
   return {
     projectCost: projectCost.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
     availableMarginCapital: availableMarginCapital.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
     requiredOwnContribution: requiredOwnContribution.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
-    shortfall: shortfall.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
-    baseLoanAmount: rawBaseLoan.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
-    loanAmount: baseLoanAmount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    maximumEligibleLoan: maximumEligibleLoan.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    actualLoanRequirement: actualLoanRequirement.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    shortfall: contributionShortfall.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    excessContribution: excessContribution.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    actualContributionPercentage: actualContributionPercentage.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    meetsMinimumRequirement,
+    baseLoanAmount: maximumEligibleLoan.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
+    loanAmount: eligibleLoanAmount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
     theoretical10PercentMargin: theoretical10PercentMargin.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
     financingPercentage: finPct.toDecimalPlaces(2, Decimal.ROUND_HALF_UP),
   };

@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import type { FeasibilityReportData } from '../api/questionnaire';
 import { formatLabel, formatTagsList } from './formatters';
 import { resolvePricingPillars } from './pricingPillars';
+import { calculateFundingBreakdown, formatIndianCurrency } from './financeCalculator';
 
 export function generateFeasibilityReportPdf(report: FeasibilityReportData, lang: 'en' | 'hi' | 'gu' = 'en'): void {
   const doc = new jsPDF({
@@ -26,8 +27,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData, lang
   const bgLight = [248, 250, 252]; // #f8fafc
 
   const formatCurrency = (val: number | null | undefined): string => {
-    if (val === null || val === undefined || isNaN(Number(val))) return 'Awaiting Inputs';
-    return `Rs. ${Number(val).toLocaleString('en-IN')}`;
+    return formatIndianCurrency(val);
   };
 
   const checkPageBreak = (neededHeight: number) => {
@@ -243,33 +243,102 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData, lang
   // ==========================================
   renderSectionHeader(5, 'Financial Feasibility & Scheme Structure');
   const fin = report.financialFeasibility;
-  const projectCost = fin.projectCost || 3700000;
-  const ownContribution = fin.ownContribution || 299997;
-  const required10Percent = fin.requiredOwnContribution || 370000;
-  const shortfall = fin.shortfall !== undefined ? fin.shortfall : Math.max(0, required10Percent - ownContribution);
-  const isCompliant = shortfall === 0;
-  const eligibleLoan = fin.finalEligibleLoan || fin.baseLoanAmount || 3330000;
+  const projectCost = fin.projectCost || 3500000;
+  const ownContribution = fin.ownContribution || 300000;
+  const funding = calculateFundingBreakdown(projectCost, ownContribution);
 
+  // --- Visual 1 & 2: Funding Composition Stacked Bar & Margin Visual ---
+  checkPageBreak(32);
+  
+  // Card background
+  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+  doc.roundedRect(margin, cursorY, contentWidth, 26, 2, 2, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(margin, cursorY, contentWidth, 26, 2, 2, 'S');
+
+  // Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(headerBlue[0], headerBlue[1], headerBlue[2]);
+  doc.text('Financing Composition (Configured Demo Baseline: 90% Loan / 10% Own Contribution)', margin + 4, cursorY + 5);
+
+  // Stacked Bar
+  const barY = cursorY + 8;
+  const barHeight = 6;
+  const barWidth = contentWidth - 8;
+  const barX = margin + 4;
+
+  // Background bar
+  doc.setFillColor(226, 232, 240);
+  doc.roundedRect(barX, barY, barWidth, barHeight, 1.5, 1.5, 'F');
+
+  const ownWidth = Math.max(2, (funding.actualContributionPercentage / 100) * barWidth);
+  const loanPct = (funding.eligibleLoanAmount / funding.totalProjectCost) * 100;
+  const loanWidth = Math.max(2, (loanPct / 100) * barWidth);
+
+  // Own contribution segment (Teal)
+  doc.setFillColor(accentTeal[0], accentTeal[1], accentTeal[2]);
+  doc.roundedRect(barX, barY, ownWidth, barHeight, 1.5, 1.5, 'F');
+
+  // Eligible Loan segment (Navy)
+  doc.setFillColor(headerBlue[0], headerBlue[1], headerBlue[2]);
+  doc.rect(barX + ownWidth, barY, Math.min(barWidth - ownWidth, loanWidth), barHeight, 'F');
+
+  // Shortfall segment if any (Amber)
+  if (funding.contributionShortfall > 0) {
+    const shortfallWidth = Math.max(0, barWidth - ownWidth - loanWidth);
+    if (shortfallWidth > 0) {
+      doc.setFillColor(245, 158, 11);
+      doc.rect(barX + ownWidth + loanWidth, barY, shortfallWidth, barHeight, 'F');
+    }
+  }
+
+  // Legend & Metrics beneath bar
+  doc.setFontSize(6.8);
+  doc.setFont('helvetica', 'bold');
+  
+  // Own Contribution label
+  doc.setTextColor(6, 120, 90);
+  doc.text(`● Own Contribution: ${formatCurrency(funding.ownContribution)} (${funding.actualContributionPercentage}%)`, barX, barY + 11);
+
+  // Bank Loan label
+  doc.setTextColor(headerBlue[0], headerBlue[1], headerBlue[2]);
+  doc.text(`● Eligible Bank Loan: ${formatCurrency(funding.eligibleLoanAmount)} (${loanPct.toFixed(1)}%)`, barX + (barWidth * 0.40), barY + 11);
+
+  // Status Badge / Text
+  if (funding.meetsMinimumRequirement) {
+    doc.setTextColor(6, 120, 90);
+    doc.text(`✓ Minimum 10% Requirement Met (Excess: ${formatCurrency(funding.excessContribution)})`, barX, barY + 15);
+  } else {
+    doc.setTextColor(180, 83, 9);
+    doc.text(`⚠ Minimum 10% Margin Not Met — Funding Gap / Shortfall: ${formatCurrency(funding.contributionShortfall)}`, barX, barY + 15);
+  }
+
+  cursorY += 30;
+
+  // Parameters Table
   autoTable(doc, {
     startY: cursorY,
     margin: { left: margin, right: margin },
     theme: 'grid',
     headStyles: { fillColor: headerBlue as any, textColor: 255, fontSize: 8 },
-    bodyStyles: { fontSize: 7.5, textColor: textDark as any },
+    bodyStyles: { fontSize: 7.2, textColor: textDark as any },
     head: [['Financial Feasibility Parameter', 'Value', 'Scheme Specification', 'Detail']],
     body: [
-      ['Total Project Cost', formatCurrency(projectCost), 'Selected Financing Scheme', fin.schemeName || 'Term Loan Scheme'],
-      ['Maximum Scheme Financing (90%)', formatCurrency(fin.maximumSchemeFinancing || Math.round(projectCost * 0.9)), 'Scheme Loan Cap', formatCurrency(fin.schemeLoanCap || 4500000)],
-      ['Final Eligible Bank Loan', formatCurrency(eligibleLoan), 'Annual Interest Rate', `${fin.annualInterestRate || '8.0%'} (Fixed)`],
-      ['Required 10% Minimum Margin', formatCurrency(required10Percent), 'Repayment Frequency', fin.repaymentFrequency || 'Quarterly'],
-      ['Applicant Own Contribution', `${formatCurrency(ownContribution)} (${fin.actualContributionPercentage || 8.11}%)`, 'Tenure & Moratorium', `${fin.totalTenureMonths || 84} Mo Total (${fin.moratoriumMonths || 6} Mo Moratorium)`],
+      ['Total Project Cost', formatCurrency(funding.totalProjectCost), 'Selected Financing Scheme', fin.schemeName || 'Term Loan Scheme'],
+      ['Maximum Eligible Bank Loan (90%)', formatCurrency(funding.maximumEligibleLoan), 'Scheme Loan Cap', formatCurrency(fin.schemeLoanCap || 4500000)],
+      ['Actual Loan Requirement', formatCurrency(funding.actualLoanRequirement), 'Annual Interest Rate', `${fin.annualInterestRate || '8.0%'} (Fixed)`],
+      ['Final Eligible Bank Loan', formatCurrency(funding.eligibleLoanAmount), 'Repayment Frequency', fin.repaymentFrequency || 'Quarterly'],
+      ['Required 10% Minimum Margin', formatCurrency(funding.requiredContribution), 'Tenure & Moratorium', `${fin.totalTenureMonths || 84} Mo Total (${fin.moratoriumMonths || 6} Mo Moratorium)`],
+      ['Applicant Own Contribution', `${formatCurrency(funding.ownContribution)} (${funding.actualContributionPercentage}%)`, 'Active Repayment Installments', `${fin.activeRepaymentsCount || 26} Periods (${fin.activeRepaymentPeriodMonths || 78} Mo)`],
       [
         'Margin Requirement Status',
-        isCompliant ? 'Compliant (10%+ Satisfied)' : `Requirement Not Met (Shortfall: ${formatCurrency(shortfall)})`,
-        'Active Repayments',
-        `${fin.activeRepaymentsCount || 26} Quarterly Installments (${fin.activeRepaymentPeriodMonths || 78} Mo)`,
+        funding.meetsMinimumRequirement
+          ? `Compliant (10%+ Satisfied)`
+          : `Requirement Not Met (Shortfall: ${formatCurrency(funding.contributionShortfall)})`,
+        'Quarterly Installment (Q3–Q28)',
+        formatCurrency(Number(fin.installmentAmount) || 166667),
       ],
-      ['Requested Funding Gap', formatCurrency(fin.requestedFundingGap || 3400003), 'Quarterly Installment (Q3–Q28)', formatCurrency(fin.installmentAmount as any || 166667)],
     ],
   });
   cursorY = (doc as any).lastAutoTable.finalY + 6;
@@ -295,7 +364,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData, lang
           `Monthly Revenue: ${formatCurrency(fin.demoCashFlow.monthlyRevenue)}\nMonthly Cost: ${formatCurrency(fin.demoCashFlow.monthlyOperatingCost)}`,
           `Monthly Surplus: ${formatCurrency(fin.demoCashFlow.monthlyOperatingSurplus)}`,
           `Annual Cash Available: ${formatCurrency(fin.demoCashFlow.annualCashAvailable)}\nAnnual Debt Service: ${formatCurrency(fin.demoCashFlow.annualDebtService)}`,
-          `${fin.dscr !== null ? `${fin.dscr}x (${fin.dscrStatus})` : 'Awaiting Inputs'}`,
+          `${fin.dscr !== null ? `${fin.dscr}x (${fin.dscrStatus})` : 'DSCR unavailable — cash-flow inputs required'}`,
         ],
       ],
     });
@@ -303,7 +372,7 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData, lang
   }
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.2);
   doc.setTextColor(textDark[0], textDark[1], textDark[2]);
   const dscrExp = doc.splitTextToSize(`Advisory Explanation: ${fin.dscrExplanation}`, contentWidth);
   doc.text(dscrExp, margin, cursorY);
@@ -315,11 +384,11 @@ export function generateFeasibilityReportPdf(report: FeasibilityReportData, lang
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.5);
     doc.setTextColor(headerBlue[0], headerBlue[1], headerBlue[2]);
-    doc.text(`Amortization Schedule (${fin.repaymentSchedule.length} Quarterly Periods: 2 Moratorium + 26 Active Repayment):`, margin, cursorY);
+    doc.text(`Amortization Schedule (${fin.repaymentSchedule.length} Periods: ${fin.moratoriumMonths ? Math.round(fin.moratoriumMonths / 3) : 2} Moratorium + ${fin.activeRepaymentsCount || 26} Active Repayment):`, margin, cursorY);
     cursorY += 4.5;
 
-    const schedBody = fin.repaymentSchedule.map((item: any, idx: number) => {
-      const isMoratorium = item.isMoratorium || idx < 2;
+    const schedBody = fin.repaymentSchedule.map((item: any) => {
+      const isMoratorium = item.isMoratorium;
       return [
         `Q${item.sequenceNumber}`,
         isMoratorium ? 'Moratorium' : 'Active Repayment',

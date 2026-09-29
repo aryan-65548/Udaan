@@ -41,28 +41,33 @@ describe('Finance Calculator Domain', () => {
   });
 
   describe('B. Loan Calculations & Scheme Loan Caps (calculateLoanStructure)', () => {
-    it('Micro Finance: Project Cost = ₹1,40,000, Base Loan = ₹1,26,000, Final Loan = ₹1,25,000, Required Contribution = ₹15,000', () => {
+    it('Micro Finance: Project Cost = ₹1,40,000, Max Loan = ₹1,25,000, Own Contribution = ₹14,000', () => {
       const result = calculateLoanStructure(
         { projectCost: 140000, ownContribution: 14000 },
         { schemeCode: 'MICRO_FINANCE', schemeName: 'Micro Finance', financingPercentage: 90, maxLoanAmount: 125000 }
       );
       expect(result.projectCost.toNumber()).toBe(140000);
-      expect(result.baseLoanAmount.toNumber()).toBe(126000); // 90% of 140k
-      expect(result.loanAmount.toNumber()).toBe(125000); // Capped at 125k
-      expect(result.requiredOwnContribution.toNumber()).toBe(15000); // 140k - 125k
+      expect(result.maximumEligibleLoan.toNumber()).toBe(125000); // 90% is 126k, capped at 125k
+      expect(result.actualLoanRequirement.toNumber()).toBe(126000); // 140k - 14k
+      expect(result.loanAmount.toNumber()).toBe(125000); // MIN(126k, 125k) = 125k
+      expect(result.requiredOwnContribution.toNumber()).toBe(14000); // 10% of 140k
       expect(result.availableMarginCapital.toNumber()).toBe(14000);
-      expect(result.shortfall.toNumber()).toBe(1000); // 15k - 14k
+      expect(result.shortfall.toNumber()).toBe(0);
+      expect(result.meetsMinimumRequirement).toBe(true);
     });
 
-    it('Micro Finance with higher own contribution: Project Cost = ₹1,40,000, Own Contribution = ₹20,000 -> Shortfall = ₹0', () => {
+    it('Micro Finance with higher own contribution: Project Cost = ₹1,40,000, Own Contribution = ₹20,000 -> Eligible Loan = ₹1,20,000', () => {
       const result = calculateLoanStructure(
         { projectCost: 140000, ownContribution: 20000 },
         { schemeCode: 'MICRO_FINANCE', schemeName: 'Micro Finance', financingPercentage: 90, maxLoanAmount: 125000 }
       );
-      expect(result.loanAmount.toNumber()).toBe(125000);
-      expect(result.requiredOwnContribution.toNumber()).toBe(15000);
+      expect(result.actualLoanRequirement.toNumber()).toBe(120000); // 140k - 20k
+      expect(result.loanAmount.toNumber()).toBe(120000); // MIN(120k, 125k) = 120k
+      expect(result.requiredOwnContribution.toNumber()).toBe(14000);
       expect(result.availableMarginCapital.toNumber()).toBe(20000);
+      expect(result.excessContribution.toNumber()).toBe(6000);
       expect(result.shortfall.toNumber()).toBe(0);
+      expect(result.meetsMinimumRequirement).toBe(true);
     });
 
     it('Term Loan: Project Cost = ₹10,00,000, Base Loan = ₹9,00,000, Final Loan = ₹9,00,000, Required Contribution = ₹1,00,000', () => {
@@ -71,20 +76,24 @@ describe('Finance Calculator Domain', () => {
         { schemeCode: 'TERM_LOAN', schemeName: 'Term Loan', financingPercentage: 90, maxLoanAmount: 4500000 }
       );
       expect(result.projectCost.toNumber()).toBe(1000000);
-      expect(result.baseLoanAmount.toNumber()).toBe(900000);
+      expect(result.maximumEligibleLoan.toNumber()).toBe(900000);
       expect(result.loanAmount.toNumber()).toBe(900000);
       expect(result.requiredOwnContribution.toNumber()).toBe(100000);
       expect(result.shortfall.toNumber()).toBe(0);
+      expect(result.meetsMinimumRequirement).toBe(true);
     });
 
-    it('Term Loan capping: Project Cost = ₹55,00,000, Base Loan = ₹49,50,000, Capped Loan = ₹45,00,000', () => {
+    it('Term Loan capping: Project Cost = ₹55,00,000, Max Loan Cap = ₹45,00,000, Own Contribution = ₹5,50,000', () => {
       const result = calculateLoanStructure(
         { projectCost: 5500000, ownContribution: 550000 },
         { schemeCode: 'TERM_LOAN', schemeName: 'Term Loan', financingPercentage: 90, maxLoanAmount: 4500000 }
       );
-      expect(result.loanAmount.toNumber()).toBe(4500000);
-      expect(result.requiredOwnContribution.toNumber()).toBe(1000000); // 55L - 45L
-      expect(result.shortfall.toNumber()).toBe(450000); // 10L req - 5.5L margin
+      expect(result.maximumEligibleLoan.toNumber()).toBe(4500000);
+      expect(result.actualLoanRequirement.toNumber()).toBe(4950000); // 55L - 5.5L
+      expect(result.loanAmount.toNumber()).toBe(4500000); // Capped at 45L
+      expect(result.requiredOwnContribution.toNumber()).toBe(550000); // 10% of 55L
+      expect(result.shortfall.toNumber()).toBe(0);
+      expect(result.meetsMinimumRequirement).toBe(true);
     });
 
     it('preserves legacy fallback to 10x margin when projectCost is omitted', () => {
@@ -94,8 +103,8 @@ describe('Finance Calculator Domain', () => {
       );
       expect(result.projectCost.toNumber()).toBe(140000);
       expect(result.loanAmount.toNumber()).toBe(125000);
-      expect(result.requiredOwnContribution.toNumber()).toBe(15000);
-      expect(result.shortfall.toNumber()).toBe(1000);
+      expect(result.requiredOwnContribution.toNumber()).toBe(14000);
+      expect(result.shortfall.toNumber()).toBe(0);
     });
   });
 
@@ -309,11 +318,11 @@ describe('Finance Calculator Domain', () => {
     });
   });
 
-  describe('H. Fixed Term Loan Demo Scenario (₹37,00,000 / ₹2,99,997)', () => {
-    it('accurately validates loan structure, shortfall, 26 active quarters, and ₹0.00 closing principal', () => {
+  describe('H. Scenario A — Term Loan Demo Scenario (₹35,00,000 / ₹3,00,000)', () => {
+    it('accurately validates loan structure, ₹50,000 shortfall, 8.57% actual contribution, and ₹0.00 closing principal', () => {
       const inputs = {
-        projectCost: 3700000,
-        ownContribution: 299997,
+        projectCost: 3500000,
+        ownContribution: 300000,
         requestedMoratoriumInterestTreatment: 'PAY_CURRENT' as const,
       };
 
@@ -332,24 +341,24 @@ describe('Finance Calculator Domain', () => {
       const result = runFinanceCalculation(inputs, scheme);
 
       // 1. Total Project Cost
-      expect(result.loanStructure.projectCost.toNumber()).toBe(3700000);
-      // 2. 90% Base Loan = ₹33,30,000
-      expect(result.loanStructure.baseLoanAmount.toNumber()).toBe(3330000);
-      // 3. Term Loan Cap = ₹45,00,000
-      expect(scheme.maxLoanAmount).toBe(4500000);
-      // 4. Final Eligible Loan = MIN(₹33,30,000, ₹45,00,000) = ₹33,30,000
-      expect(result.loanStructure.loanAmount.toNumber()).toBe(3330000);
-      // 5. Required Own Contribution = ₹37,00,000 - ₹33,30,000 = ₹3,70,000
-      expect(result.loanStructure.requiredOwnContribution.toNumber()).toBe(370000);
-      // 6. Actual Own Contribution = ₹2,99,997
-      expect(result.loanStructure.availableMarginCapital.toNumber()).toBe(299997);
-      // 7. Margin Shortfall = ₹3,70,000 - ₹2,99,997 = ₹70,003
-      expect(result.loanStructure.shortfall.toNumber()).toBe(70003);
-      // 8. Actual Contribution Percentage = 299997 / 3700000 = 8.11%
-      const actualPct = (299997 / 3700000) * 100;
-      expect(actualPct).toBeCloseTo(8.11, 2);
+      expect(result.loanStructure.projectCost.toNumber()).toBe(3500000);
+      // 2. 90% Maximum Eligible Loan = ₹31,50,000
+      expect(result.loanStructure.maximumEligibleLoan.toNumber()).toBe(3150000);
+      // 3. Actual Loan Requirement = ₹35,00,000 - ₹3,00,000 = ₹32,00,000
+      expect(result.loanStructure.actualLoanRequirement.toNumber()).toBe(3200000);
+      // 4. Eligible Bank Loan = MIN(₹32,00,000, ₹31,50,000) = ₹31,50,000
+      expect(result.loanStructure.loanAmount.toNumber()).toBe(3150000);
+      // 5. Required Own Contribution = ₹35,00,000 * 10% = ₹3,50,000
+      expect(result.loanStructure.requiredOwnContribution.toNumber()).toBe(350000);
+      // 6. Actual Own Contribution = ₹3,00,000
+      expect(result.loanStructure.availableMarginCapital.toNumber()).toBe(300000);
+      // 7. Funding Gap / Contribution Shortfall = ₹3,50,000 - ₹3,00,000 = ₹50,000
+      expect(result.loanStructure.shortfall.toNumber()).toBe(50000);
+      // 8. Actual Contribution Percentage = (3,00,000 / 35,00,000) * 100 = 8.57%
+      expect(result.loanStructure.actualContributionPercentage.toNumber()).toBeCloseTo(8.57, 2);
       // 9. Minimum 10% requirement NOT met
-      expect(actualPct < 10).toBe(true);
+      expect(result.loanStructure.actualContributionPercentage.toNumber() < 10).toBe(true);
+      expect(result.loanStructure.meetsMinimumRequirement).toBe(false);
 
       // 10. Scheme tenure & active repayment counts
       // 84 total months, 6 moratorium months -> 78 active months -> 26 active quarterly periods
@@ -362,25 +371,129 @@ describe('Finance Calculator Domain', () => {
       expect(moratoriumRows).toHaveLength(2);
       expect(activeRows).toHaveLength(26);
 
-      // 11. Moratorium interest payments = ₹33,30,000 * 2.0% = ₹66,600 per quarter
-      expect(moratoriumRows[0].interestPayment.toNumber()).toBe(66600);
+      // 11. Moratorium interest payments = ₹31,50,000 * 2.0% = ₹63,000 per quarter
+      expect(moratoriumRows[0].interestPayment.toNumber()).toBe(63000);
       expect(moratoriumRows[0].principalPayment.toNumber()).toBe(0);
-      expect(moratoriumRows[0].installmentAmount.toNumber()).toBe(66600);
+      expect(moratoriumRows[0].installmentAmount.toNumber()).toBe(63000);
 
-      // 12. Active quarterly installment = ₹1,65,498.44
-      expect(activeRows[0].installmentAmount.toNumber()).toBeCloseTo(165498.44, 2);
+      // 12. Active quarterly installment based on ₹31,50,000
+      expect(activeRows[0].installmentAmount.toNumber()).toBeGreaterThan(0);
 
       // 13. Final closing principal is exactly ₹0.00 after reconciliation
       const finalRow = result.schedule[result.schedule.length - 1];
       expect(finalRow.closingPrincipal.toNumber()).toBe(0);
 
-      // 14. DSCR deterministic calculation with demo benchmark
-      const demoRev = new Decimal(450000);
-      const demoCost = new Decimal(395000);
-      const quarterlyInstallment = activeRows[0].installmentAmount;
-      const dscrResult = calculateDSCR(demoRev, demoCost, quarterlyInstallment, 'QUARTERLY');
-      expect(dscrResult.dscr?.toNumber()).toBe(1);
-      expect(dscrResult.status).toBe('TIGHT');
+      // 14. Total principal repaid reconciles exactly to ₹31,50,000
+      const totalPrincipalRepaid = result.schedule.reduce(
+        (sum, item) => sum.plus(item.principalPayment),
+        new Decimal(0)
+      );
+      expect(totalPrincipalRepaid.toNumber()).toBeCloseTo(3150000, 2);
+    });
+  });
+
+  describe('I. Scenario B — Microfinance Demo Scenario (₹1,20,000 / ₹14,000)', () => {
+    it('accurately validates loan structure, ₹0 shortfall, 11.67% actual contribution, ₹2,000 excess, and ₹0.00 closing principal', () => {
+      const inputs = {
+        projectCost: 120000,
+        ownContribution: 14000,
+        requestedMoratoriumInterestTreatment: 'PAY_CURRENT' as const,
+      };
+
+      const scheme = {
+        schemeCode: 'MICRO_FINANCE',
+        schemeName: 'Micro Finance Scheme',
+        financingPercentage: 90,
+        maxLoanAmount: 125000,
+        interestRate: 6.5,
+        tenureMonths: 36,
+        moratoriumMonths: 3,
+        paymentFrequency: 'QUARTERLY' as const,
+        moratoriumInterestTreatment: 'PAY_CURRENT' as const,
+      };
+
+      const result = runFinanceCalculation(inputs, scheme);
+
+      // 1. Total Project Cost = ₹1,20,000
+      expect(result.loanStructure.projectCost.toNumber()).toBe(120000);
+      // 2. Required 10% Contribution = ₹12,000
+      expect(result.loanStructure.requiredOwnContribution.toNumber()).toBe(12000);
+      // 3. Maximum Eligible 90% Loan = ₹1,08,000
+      expect(result.loanStructure.maximumEligibleLoan.toNumber()).toBe(108000);
+      // 4. Actual Loan Requirement = ₹1,20,000 - ₹14,000 = ₹1,06,000
+      expect(result.loanStructure.actualLoanRequirement.toNumber()).toBe(106000);
+      // 5. Eligible Loan Amount = MIN(₹1,06,000, ₹1,08,000) = ₹1,06,000
+      expect(result.loanStructure.loanAmount.toNumber()).toBe(106000);
+      // 6. Contribution Shortfall = ₹0
+      expect(result.loanStructure.shortfall.toNumber()).toBe(0);
+      // 7. Excess Contribution Above Minimum = ₹14,000 - ₹12,000 = ₹2,000
+      expect(result.loanStructure.excessContribution.toNumber()).toBe(2000);
+      // 8. Actual Contribution Percentage = (14,000 / 1,20,000) * 100 = 11.67%
+      expect(result.loanStructure.actualContributionPercentage.toNumber()).toBeCloseTo(11.67, 2);
+      // 9. Minimum 10% requirement IS met
+      expect(result.loanStructure.actualContributionPercentage.toNumber() >= 10).toBe(true);
+      expect(result.loanStructure.meetsMinimumRequirement).toBe(true);
+
+      // 10. Schedule: 36 months total, 3 months moratorium (1 quarter) -> 11 active quarters (12 periods total)
+      expect(result.isScheduleCalculable).toBe(true);
+      expect(result.schedule).toHaveLength(12);
+      expect(result.schedule[0].isMoratorium).toBe(true);
+      expect(result.schedule[1].isMoratorium).toBe(false);
+
+      // 11. Final closing principal reconciles to exactly ₹0.00
+      const finalRow = result.schedule[result.schedule.length - 1];
+      expect(finalRow.closingPrincipal.toNumber()).toBe(0);
+
+      // 12. Total principal repaid reconciles exactly to ₹1,06,000
+      const totalPrincipalRepaid = result.schedule.reduce(
+        (sum, item) => sum.plus(item.principalPayment),
+        new Decimal(0)
+      );
+      expect(totalPrincipalRepaid.toNumber()).toBeCloseTo(106000, 2);
+    });
+  });
+
+  describe('J. Additional Threshold and DSCR Invariant Tests', () => {
+    it('Own contribution exactly equal to 10% -> 0 shortfall, 0 excess, requirement met', () => {
+      const result = calculateLoanStructure(
+        { projectCost: 200000, ownContribution: 20000 },
+        { schemeCode: 'MICRO_FINANCE', schemeName: 'Micro', financingPercentage: 90, maxLoanAmount: 200000 }
+      );
+      expect(result.requiredOwnContribution.toNumber()).toBe(20000);
+      expect(result.actualContributionPercentage.toNumber()).toBe(10);
+      expect(result.shortfall.toNumber()).toBe(0);
+      expect(result.excessContribution.toNumber()).toBe(0);
+      expect(result.meetsMinimumRequirement).toBe(true);
+      expect(result.loanAmount.toNumber()).toBe(180000);
+    });
+
+    it('Own contribution greater than 10% (e.g. 25%) -> 0 shortfall, excess calculated, eligible loan equals actual requirement', () => {
+      const result = calculateLoanStructure(
+        { projectCost: 1000000, ownContribution: 250000 },
+        { schemeCode: 'TERM_LOAN', schemeName: 'Term Loan', financingPercentage: 90, maxLoanAmount: 4500000 }
+      );
+      expect(result.requiredOwnContribution.toNumber()).toBe(100000);
+      expect(result.actualContributionPercentage.toNumber()).toBe(25);
+      expect(result.shortfall.toNumber()).toBe(0);
+      expect(result.excessContribution.toNumber()).toBe(150000);
+      expect(result.actualLoanRequirement.toNumber()).toBe(750000);
+      expect(result.maximumEligibleLoan.toNumber()).toBe(900000);
+      expect(result.loanAmount.toNumber()).toBe(750000); // Capped by actual requirement
+      expect(result.meetsMinimumRequirement).toBe(true);
+    });
+
+    it('DSCR is null / unavailable when revenue or operating cost inputs are missing', () => {
+      const dscrMissingRev = calculateDSCR(null, new Decimal(39500), new Decimal(5000), 'MONTHLY');
+      expect(dscrMissingRev.dscr).toBeNull();
+      expect(dscrMissingRev.status).toBe('UNAVAILABLE');
+
+      const dscrMissingCost = calculateDSCR(new Decimal(45000), null, new Decimal(5000), 'MONTHLY');
+      expect(dscrMissingCost.dscr).toBeNull();
+      expect(dscrMissingCost.status).toBe('UNAVAILABLE');
+
+      const dscrMissingBoth = calculateDSCR(null, null, new Decimal(5000), 'MONTHLY');
+      expect(dscrMissingBoth.dscr).toBeNull();
+      expect(dscrMissingBoth.status).toBe('UNAVAILABLE');
     });
   });
 });

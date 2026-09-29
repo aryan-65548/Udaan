@@ -264,7 +264,7 @@ describe('Sahayak Questionnaire & Feasibility Report Integration Tests', () => {
     // 2. Financial Feasibility Engine Results
     expect(report.financialFeasibility).toBeDefined();
     expect(report.financialFeasibility.projectCost).toBe(100000);
-    expect(report.financialFeasibility.baseLoanAmount).toBe(85000);
+    expect(report.financialFeasibility.baseLoanAmount).toBe(90000);
     expect(report.financialFeasibility.schemeName).toBeDefined();
 
     // 3. Sahayak Business Context & Infrastructure Insights
