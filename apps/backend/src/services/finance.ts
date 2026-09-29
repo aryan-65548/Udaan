@@ -103,6 +103,7 @@ export async function runAndPersistFinanceCalculation(assessmentId: string, inpu
     financingPercentage: scheme.financingPercentage ?? null,
     maxLoanAmount: scheme.maxLoanAmount ?? null,
     interestRate: scheme.interestRate ?? null,
+    moratoriumInterestTreatment: (inputs.requestedMoratoriumInterestTreatment || 'PAY_CURRENT') as any,
   };
 
   // 5. Run deterministic calculation

@@ -308,5 +308,80 @@ describe('Finance Calculator Domain', () => {
       expect(res.dscr).toBeNull();
     });
   });
+
+  describe('H. Fixed Term Loan Demo Scenario (₹37,00,000 / ₹2,99,997)', () => {
+    it('accurately validates loan structure, shortfall, 26 active quarters, and ₹0.00 closing principal', () => {
+      const inputs = {
+        projectCost: 3700000,
+        ownContribution: 299997,
+        requestedMoratoriumInterestTreatment: 'PAY_CURRENT' as const,
+      };
+
+      const scheme = {
+        schemeCode: 'TERM_LOAN',
+        schemeName: 'Term Loan Scheme',
+        financingPercentage: 90,
+        maxLoanAmount: 4500000,
+        interestRate: 8.0,
+        tenureMonths: 84,
+        moratoriumMonths: 6,
+        paymentFrequency: 'QUARTERLY' as const,
+        moratoriumInterestTreatment: 'PAY_CURRENT' as const,
+      };
+
+      const result = runFinanceCalculation(inputs, scheme);
+
+      // 1. Total Project Cost
+      expect(result.loanStructure.projectCost.toNumber()).toBe(3700000);
+      // 2. 90% Base Loan = ₹33,30,000
+      expect(result.loanStructure.baseLoanAmount.toNumber()).toBe(3330000);
+      // 3. Term Loan Cap = ₹45,00,000
+      expect(scheme.maxLoanAmount).toBe(4500000);
+      // 4. Final Eligible Loan = MIN(₹33,30,000, ₹45,00,000) = ₹33,30,000
+      expect(result.loanStructure.loanAmount.toNumber()).toBe(3330000);
+      // 5. Required Own Contribution = ₹37,00,000 - ₹33,30,000 = ₹3,70,000
+      expect(result.loanStructure.requiredOwnContribution.toNumber()).toBe(370000);
+      // 6. Actual Own Contribution = ₹2,99,997
+      expect(result.loanStructure.availableMarginCapital.toNumber()).toBe(299997);
+      // 7. Margin Shortfall = ₹3,70,000 - ₹2,99,997 = ₹70,003
+      expect(result.loanStructure.shortfall.toNumber()).toBe(70003);
+      // 8. Actual Contribution Percentage = 299997 / 3700000 = 8.11%
+      const actualPct = (299997 / 3700000) * 100;
+      expect(actualPct).toBeCloseTo(8.11, 2);
+      // 9. Minimum 10% requirement NOT met
+      expect(actualPct < 10).toBe(true);
+
+      // 10. Scheme tenure & active repayment counts
+      // 84 total months, 6 moratorium months -> 78 active months -> 26 active quarterly periods
+      // Total schedule length = 28 periods (2 moratorium + 26 active repayments)
+      expect(result.isScheduleCalculable).toBe(true);
+      expect(result.schedule).toHaveLength(28);
+
+      const moratoriumRows = result.schedule.filter((r) => r.isMoratorium);
+      const activeRows = result.schedule.filter((r) => !r.isMoratorium);
+      expect(moratoriumRows).toHaveLength(2);
+      expect(activeRows).toHaveLength(26);
+
+      // 11. Moratorium interest payments = ₹33,30,000 * 2.0% = ₹66,600 per quarter
+      expect(moratoriumRows[0].interestPayment.toNumber()).toBe(66600);
+      expect(moratoriumRows[0].principalPayment.toNumber()).toBe(0);
+      expect(moratoriumRows[0].installmentAmount.toNumber()).toBe(66600);
+
+      // 12. Active quarterly installment = ₹1,65,498.44
+      expect(activeRows[0].installmentAmount.toNumber()).toBeCloseTo(165498.44, 2);
+
+      // 13. Final closing principal is exactly ₹0.00 after reconciliation
+      const finalRow = result.schedule[result.schedule.length - 1];
+      expect(finalRow.closingPrincipal.toNumber()).toBe(0);
+
+      // 14. DSCR deterministic calculation with demo benchmark
+      const demoRev = new Decimal(450000);
+      const demoCost = new Decimal(395000);
+      const quarterlyInstallment = activeRows[0].installmentAmount;
+      const dscrResult = calculateDSCR(demoRev, demoCost, quarterlyInstallment, 'QUARTERLY');
+      expect(dscrResult.dscr?.toNumber()).toBe(1);
+      expect(dscrResult.status).toBe('TIGHT');
+    });
+  });
 });
 

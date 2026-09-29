@@ -10,7 +10,6 @@ import {
   FileSpreadsheet,
   Calendar,
   Globe,
-  User as UserIcon,
   HelpCircle,
   MapPin,
   Sparkles,
@@ -113,7 +112,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         </Alert>
       )}
 
-      {/* FOUR PRIMARY USER OPTIONS */}
+      {/* PRIMARY USER OPTIONS */}
       <div style={{ marginBottom: '36px' }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '16px', color: 'var(--text-main)' }}>
           {t.quickActions}
@@ -122,20 +121,22 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
             gap: '16px',
           }}
         >
-          {/* 1. Business Advisory Guide */}
+          {/* 1. Start New Assessment */}
           <div
             className="card card-hover"
-            onClick={() => onNavigate('help')}
+            onClick={() => onNavigate('create')}
             style={{
               padding: '22px',
               cursor: 'pointer',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
+              border: '1px solid rgba(5, 150, 105, 0.25)',
+              background: 'linear-gradient(145deg, rgba(5, 150, 105, 0.05) 0%, rgba(255, 255, 255, 1) 100%)',
             }}
           >
             <div>
@@ -144,7 +145,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   width: '42px',
                   height: '42px',
                   borderRadius: '10px',
-                  background: 'var(--bg-subtle)',
+                  background: 'rgba(5, 150, 105, 0.12)',
                   color: 'var(--brand-green)',
                   display: 'flex',
                   alignItems: 'center',
@@ -152,13 +153,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                   marginBottom: '14px',
                 }}
               >
-                <HelpCircle size={22} />
+                <PlusCircle size={22} />
               </div>
               <h3 style={{ fontSize: '1.1rem', marginBottom: '6px', color: 'var(--text-main)' }}>
-                {t.advisoryGuideCardTitle}
+                {t.startNewAssessmentCardTitle}
               </h3>
               <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
-                {t.advisoryGuideCardDesc}
+                {t.startNewAssessmentCardDesc}
               </p>
             </div>
 
@@ -173,7 +174,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
                 fontSize: '0.85rem',
               }}
             >
-              <span>{t.learnMore}</span>
+              <span>{t.startAssessment}</span>
               <ArrowRight size={14} />
             </div>
           </div>
@@ -230,59 +231,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          {/* 3. Profile */}
-          <div
-            className="card card-hover"
-            onClick={() => onNavigate('profile')}
-            style={{
-              padding: '22px',
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '10px',
-                  background: 'var(--bg-subtle)',
-                  color: 'var(--brand-green)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: '14px',
-                }}
-              >
-                <UserIcon size={22} />
-              </div>
-              <h3 style={{ fontSize: '1.1rem', marginBottom: '6px', color: 'var(--text-main)' }}>
-                {t.profileCardTitle}
-              </h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
-                {t.profileCardDesc}
-              </p>
-            </div>
-
-            <div
-              style={{
-                marginTop: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                color: 'var(--brand-green)',
-                fontWeight: 600,
-                fontSize: '0.85rem',
-              }}
-            >
-              <span>{t.profile}</span>
-              <ArrowRight size={14} />
-            </div>
-          </div>
-
-          {/* 4. Help */}
+          {/* 3. Help & Advisory Guide */}
           <div
             className="card card-hover"
             onClick={() => onNavigate('help')}
@@ -332,6 +281,110 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate }) => {
               <span>{t.help}</span>
               <ArrowRight size={14} />
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* UDAAN MISSION & VISION SECTION */}
+      <div
+        style={{
+          background: '#ffffff',
+          border: '1px solid var(--border-light)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '28px',
+          marginBottom: '36px',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+          <Sparkles size={20} color="var(--brand-green)" />
+          <h2 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, color: 'var(--text-main)' }}>
+            {t.missionVisionTitle}
+          </h2>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '20px',
+            marginBottom: '24px',
+          }}
+        >
+          <div
+            style={{
+              padding: '18px 20px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, rgba(5, 150, 105, 0.06) 0%, rgba(5, 150, 105, 0.02) 100%)',
+              border: '1px solid rgba(5, 150, 105, 0.2)',
+            }}
+          >
+            <div style={{ fontWeight: 800, color: 'var(--brand-green)', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+              🎯 {language === 'hi' ? 'हमारा मिशन (Mission)' : language === 'gu' ? 'અમારું મિશન (Mission)' : 'Our Mission'}
+            </div>
+            <p style={{ margin: 0, fontSize: '0.92rem', lineHeight: 1.55, color: 'var(--text-main)' }}>
+              {t.udaanMission}
+            </p>
+          </div>
+
+          <div
+            style={{
+              padding: '18px 20px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.06) 0%, rgba(37, 99, 235, 0.02) 100%)',
+              border: '1px solid rgba(37, 99, 235, 0.2)',
+            }}
+          >
+            <div style={{ fontWeight: 800, color: '#2563eb', fontSize: '0.9rem', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px' }}>
+              🌟 {language === 'hi' ? 'हमारा विजन (Vision)' : language === 'gu' ? 'અમારું વિઝન (Vision)' : 'Our Vision'}
+            </div>
+            <p style={{ margin: 0, fontSize: '0.92rem', lineHeight: 1.55, color: 'var(--text-main)' }}>
+              {t.udaanVision}
+            </p>
+          </div>
+        </div>
+
+        {/* 6 Core Principles & Objectives */}
+        <div>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '14px' }}>
+            {t.coreObjectivesTitle}
+          </h3>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '12px',
+            }}
+          >
+            {[
+              t.objective1,
+              t.objective2,
+              t.objective3,
+              t.objective4,
+              t.objective5,
+              t.objective6,
+            ].map((objText, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '10px',
+                  padding: '12px 14px',
+                  borderRadius: '8px',
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '0.86rem',
+                  lineHeight: 1.45,
+                  color: '#334155',
+                }}
+              >
+                <div style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'rgba(5, 150, 105, 0.15)', color: 'var(--brand-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0, marginTop: '2px' }}>
+                  ✓
+                </div>
+                <span>{objText}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

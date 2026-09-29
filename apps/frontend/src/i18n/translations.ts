@@ -372,6 +372,24 @@ export interface Translations {
   actionPlanTitle: string;
   conclusionTitle: string;
   limitationsTitle: string;
+  schemeLoanCapLabel: string;
+  finalEligibleLoanLabel: string;
+  fundingGapLabel: string;
+  activeRepaymentPeriodLabel: string;
+  activeRepaymentsCountLabel: string;
+  annualDebtServiceLabel: string;
+  illustrativeDscrBadge: string;
+  otherGovtSchemesTitle: string;
+  missionVisionTitle: string;
+  udaanMission: string;
+  udaanVision: string;
+  coreObjectivesTitle: string;
+  objective1: string;
+  objective2: string;
+  objective3: string;
+  objective4: string;
+  objective5: string;
+  objective6: string;
 }
 
 export const translations: Record<SupportedLanguage, Translations> = {
@@ -754,6 +772,24 @@ export const translations: Record<SupportedLanguage, Translations> = {
     actionPlanTitle: 'Step-by-Step Business Implementation Action Plan',
     conclusionTitle: 'Conclusion & Strategic Advisory Summary',
     limitationsTitle: 'Methodology & Advisory Limitations',
+    schemeLoanCapLabel: 'Scheme Loan Cap',
+    finalEligibleLoanLabel: 'Final Eligible Bank Loan',
+    fundingGapLabel: 'Requested Funding Gap',
+    activeRepaymentPeriodLabel: 'Active Repayment Period',
+    activeRepaymentsCountLabel: 'Active Scheduled Installments',
+    annualDebtServiceLabel: 'Annual Debt Service',
+    illustrativeDscrBadge: 'Illustrative Demo Assumption',
+    otherGovtSchemesTitle: 'Other Government Schemes & Institutional Support',
+    missionVisionTitle: 'UDAAN Mission & Vision',
+    udaanMission: 'Help rural and semi-urban entrepreneurs make evidence-informed business and financing decisions before borrowing.',
+    udaanVision: 'Build a transparent, multilingual feasibility platform that helps entrepreneurs understand local business conditions, financial requirements, risks, and practical next steps.',
+    coreObjectivesTitle: 'Core Principles & Objectives',
+    objective1: 'Evidence Before Borrowing: Validate commercial viability before committing to debt.',
+    objective2: 'Deterministic Financial Calculations: Transparent rules with zero fabricated estimates.',
+    objective3: 'Hyper-Local Business Context: Taluka and village-level catchment mapping.',
+    objective4: 'Multilingual Accessibility: Native Indian language advisory for every entrepreneur.',
+    objective5: 'Actionable Risk Mitigation: Concrete operational safeguards for retail businesses.',
+    objective6: 'Transparent Assumptions & Uncertainty: Clear disclosure of estimates and parameters.',
   },
 
   hi: {
@@ -1135,6 +1171,24 @@ export const translations: Record<SupportedLanguage, Translations> = {
     actionPlanTitle: 'चरणबद्ध व्यापार क्रियान्वयन कार्ययोजना (Action Plan)',
     conclusionTitle: 'निष्कर्ष एवं रणनीतिक सलाहकार सारांश',
     limitationsTitle: 'पद्धति एवं सलाहकार सीमाएं',
+    schemeLoanCapLabel: 'योजना ऋण अधिकतम सीमा',
+    finalEligibleLoanLabel: 'अंतिम पात्र बैंक ऋण',
+    fundingGapLabel: 'अनुरोधित फंडिंग अंतर',
+    activeRepaymentPeriodLabel: 'सक्रिय पुनर्भुगतान अवधि',
+    activeRepaymentsCountLabel: 'सक्रिय निर्धारित किस्तें',
+    annualDebtServiceLabel: 'वार्षिक ऋण सेवा (सालाना कुल किस्त)',
+    illustrativeDscrBadge: 'उदाहरणात्मक डेमो अनुमान',
+    otherGovtSchemesTitle: 'अन्य सरकारी योजनाएं एवं संस्थागत सहायता',
+    missionVisionTitle: 'उड़ान का मिशन और विजन',
+    udaanMission: 'ग्रामीण एवं अर्ध-शहरी उद्यमियों को कर्ज लेने से पहले साक्ष्य-आधारित व्यापार और वित्तीय निर्णय लेने में सक्षम बनाना।',
+    udaanVision: 'एक पारदर्शी, बहुभाषी व्यवहार्यता मंच बनाना जो वास्तविक स्थानीय परिस्थितियों, वित्तीय आवश्यकताओं, जोखिमों और व्यावहारिक कदमों का सटीक मार्गदर्शन करे।',
+    coreObjectivesTitle: 'मुख्य सिद्धांत एवं उद्देश्य',
+    objective1: 'उधार लेने से पहले साक्ष्य: ऋण लेने से पूर्व वस्तुनिष्ठ व्यावसायिक सत्यापन।',
+    objective2: 'निश्चित वित्तीय गणना: बिना किसी काल्पनिक आंकड़े के पारदर्शी और विश्वसनीय नियम।',
+    objective3: 'स्थानीय जमीनी हकीकत: तालुका और गांव स्तर पर सूक्ष्म बाजार विश्लेषण।',
+    objective4: 'बहुभाषी पहुंच: प्रत्येक उद्यमी के लिए भारतीय भाषाओं में सहज और सुगम सलाह।',
+    objective5: 'व्यावहारिक जोखिम न्यूनीकरण: किराना और खुदरा व्यापार के लिए ठोस सुरक्षा उपाय।',
+    objective6: 'पारदर्शी धारणाएं: अनुमानों और डेमो मापदंडों का खुला और ईमानदार प्रकटीकरण।',
   },
 
   gu: {
@@ -1516,5 +1570,23 @@ export const translations: Record<SupportedLanguage, Translations> = {
     actionPlanTitle: 'તબક્કાવાર વ્યાપાર અમલીકરણ કાર્ય યોજના (Action Plan)',
     conclusionTitle: 'નિષ્કર્ષ અને વ્યૂહાત્મક સલાહકાર સારાંશ',
     limitationsTitle: 'પદ્ધતિ અને સલાહકાર મર્યાદાઓ',
+    schemeLoanCapLabel: 'યોજના લોન મહત્તમ મર્યાદા',
+    finalEligibleLoanLabel: 'અંતિમ પાત્ર બેંક લોન',
+    fundingGapLabel: 'વિનંતી કરેલ ફંડિંગ ગેપ',
+    activeRepaymentPeriodLabel: 'સક્રિય પુનઃચુકવણી સમયગાળો',
+    activeRepaymentsCountLabel: 'સક્રિય નિર્ધારિત હપ્તાઓ',
+    annualDebtServiceLabel: 'વાર્ષિક લોન સર્વિસ',
+    illustrativeDscrBadge: 'ઉદાહરણાત્મક ડેમો અનુમાન',
+    otherGovtSchemesTitle: 'અન્ય સરકારી યોજનાઓ અને સંસ્થાકીય સહાય',
+    missionVisionTitle: 'ઉડાન મિશન અને વિઝન',
+    udaanMission: 'ગ્રામીણ અને અર્ધ-શહેરી સાહસિકોને લોન લેતા પહેલા પુરાવા આધારિત વ્યાપાર અને નાણાકીય નિર્ણયો લેવામાં સક્ષમ બનાવવા.',
+    udaanVision: 'વાસ્તવિક સ્થાનિક વ્યવસાયિક પરિસ્થિતિઓ, નાણાકીય જરૂરિયાતો અને જોખમોનું મૂલ્યાંકન કરતું પારદર્શક અને બહુભાષી પ્લેટફોર્મ બનાવવું.',
+    coreObjectivesTitle: 'મુખ્ય સિદ્ધાંતો અને ઉદ્દેશ્યો',
+    objective1: 'ઉધાર લેતા પહેલા પુરાવા: લોન લેતા પહેલા ઉદ્દેશ્યપૂર્ણ ચકાસણી.',
+    objective2: 'ચોક્કસ નાણાકીય ગણતરી: કોઈ પણ કાલ્પનિક અંદાજ વગર પારદર્શક નિયમો.',
+    objective3: 'અતિ-સ્થાનિક જમીની હકીકત: તાલુકા અને ગામ સ્તરે બજાર વિશ્લેષણ.',
+    objective4: 'બહુભાષી સુલભતા: દરેક સાહસિક માટે સ્થાનિક ભારતીય ભાષાઓમાં સુવિધા.',
+    objective5: 'વ્યવહારુ જોખમ નિવારણ: કરિયાણા અને છૂટક વ્યવસાય માટે નક્કર સુરક્ષા ઉપાયો.',
+    objective6: 'પારદર્શક ધારણાઓ: અંદાજો અને ડેમો પરિમાણોનું પ્રામાણિક પ્રદર્શન.',
   },
 };

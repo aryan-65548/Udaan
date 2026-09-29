@@ -23,6 +23,9 @@ import {
   Wifi,
 } from 'lucide-react';
 
+import { useLanguage } from '../context/LanguageContext';
+import { ReportGenerationLoading } from './ReportGenerationLoading';
+
 interface SahayakQuestionnaireProps {
   assessmentId: string;
   onComplete: (report?: FeasibilityReportData) => void;
@@ -36,12 +39,15 @@ export const SahayakQuestionnaire: React.FC<SahayakQuestionnaireProps> = ({
   onSaveAndExit,
   onBackToAssessment,
 }) => {
+  const { language } = useLanguage();
   const [data, setData] = useState<QuestionnaireData | null>(null);
   const [activeQuestionIdx, setActiveQuestionIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [generatedReport, setGeneratedReport] = useState<FeasibilityReportData | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState<string | null>(null);
 
@@ -109,7 +115,7 @@ export const SahayakQuestionnaire: React.FC<SahayakQuestionnaireProps> = ({
   };
 
   const handleFinalSubmit = async () => {
-    if (!data) return;
+    if (!data || isSubmitting || isGeneratingReport) return;
 
     // Validate all 6 questions are present in local state
     const missing: number[] = [];
@@ -126,6 +132,7 @@ export const SahayakQuestionnaire: React.FC<SahayakQuestionnaireProps> = ({
     }
 
     setIsSubmitting(true);
+    setIsGeneratingReport(true);
     setErrorMessage(null);
     try {
       // Save all answers in batch first
@@ -144,13 +151,31 @@ export const SahayakQuestionnaire: React.FC<SahayakQuestionnaireProps> = ({
           // Handled by FeasibilityReportView self-fetch
         }
       }
-      onComplete(reportData);
+      setGeneratedReport(reportData || null);
     } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to submit questionnaire');
-    } finally {
+      setErrorMessage(err.message || 'Failed to submit questionnaire and generate feasibility report');
       setIsSubmitting(false);
     }
   };
+
+  if (isGeneratingReport) {
+    return (
+      <ReportGenerationLoading
+        language={language}
+        isComplete={Boolean(generatedReport)}
+        error={errorMessage}
+        onRetry={handleFinalSubmit}
+        onCancel={() => {
+          setIsGeneratingReport(false);
+          setIsSubmitting(false);
+          if (onSaveAndExit) onSaveAndExit();
+        }}
+        onFinished={() => {
+          onComplete(generatedReport || undefined);
+        }}
+      />
+    );
+  }
 
   if (isLoading) {
     return (

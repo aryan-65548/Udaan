@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { MapPin, Search, CheckCircle2, AlertCircle, RefreshCw, Compass } from 'lucide-react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { type LocationItem, createManualLocation } from '../api/locations';
 
 interface GoogleMapsLocationPickerProps {
@@ -508,10 +510,8 @@ export const GoogleMapsLocationPicker: React.FC<GoogleMapsLocationPickerProps> =
       )}
     </div>
   );
-};
-
-/* ========================================================================= */
-/* DEMO MAP LOCATION PICKER (ACTIVE WHEN NO GOOGLE MAPS API KEY IS CONFIGURED) */
+}/* ========================================================================= */
+/* OPENSTREETMAP LEAFLET LOCATION PICKER (ACTIVE WHEN NO GOOGLE MAPS API KEY) */
 /* ========================================================================= */
 
 interface DemoPreset {
@@ -533,29 +533,29 @@ const DEMO_PRESETS: DemoPreset[] = [
   {
     name: 'Bardoli Sugar Factory Road (Sardar Patel Marg)',
     taluka: 'Bardoli',
-    lat: 21.1250,
-    lng: 73.1250,
+    lat: 21.125,
+    lng: 73.125,
     address: 'Sugar Factory Marg, Bardoli Taluka, Surat, Gujarat 394602',
   },
   {
     name: 'Kamrej Char Rasta / Highway Junction',
     taluka: 'Kamrej',
-    lat: 21.2700,
-    lng: 72.9600,
+    lat: 21.27,
+    lng: 72.96,
     address: 'Kamrej Chowkdi, National Highway 48, Kamrej, Surat, Gujarat 394185',
   },
   {
     name: 'Adajan Main Market (Surat West)',
     taluka: 'Surat City',
-    lat: 21.1950,
+    lat: 21.195,
     lng: 72.7933,
     address: 'Adajan Gam, Surat City, Surat, Gujarat 395009',
   },
   {
     name: 'Varachha Commercial Zone',
     taluka: 'Surat City',
-    lat: 21.2150,
-    lng: 72.8550,
+    lat: 21.215,
+    lng: 72.855,
     address: 'Varachha Main Road, Surat, Gujarat 395006',
   },
   {
@@ -568,25 +568,48 @@ const DEMO_PRESETS: DemoPreset[] = [
   {
     name: 'Palsana Textile Hub',
     taluka: 'Palsana',
-    lat: 21.0800,
-    lng: 72.9800,
+    lat: 21.08,
+    lng: 72.98,
     address: 'Palsana Crossroads, Palsana Taluka, Surat, Gujarat 394315',
   },
   {
     name: 'Olpad Town Market',
     taluka: 'Olpad',
-    lat: 21.3300,
-    lng: 72.7500,
+    lat: 21.33,
+    lng: 72.75,
     address: 'Main Bazaar, Olpad, Surat, Gujarat 394540',
   },
   {
     name: 'Mandvi Tapi Riverbank',
     taluka: 'Mandvi',
-    lat: 21.2500,
-    lng: 73.3000,
+    lat: 21.25,
+    lng: 73.3,
     address: 'Mandvi Town, Surat District, Gujarat 394160',
   },
 ];
+
+const createCustomPinIcon = (label: string) => {
+  const shortLabel = (label.split(',')[0] || 'Selected Location').trim();
+  const escapedLabel = shortLabel.replace(/"/g, '&quot;').slice(0, 28);
+
+  return L.divIcon({
+    className: 'udaan-leaflet-marker',
+    html: `
+      <div style="display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%); cursor: grab; pointer-events: auto;">
+        <div style="background: #0b132b; color: #06d6a0; border: 1.5px solid #06d6a0; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; white-space: nowrap; box-shadow: 0 3px 8px rgba(0,0,0,0.35); margin-bottom: 2px;">
+          ${escapedLabel}
+        </div>
+        <svg width="34" height="42" viewBox="0 0 24 24" fill="#dc2626" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="filter: drop-shadow(0 4px 6px rgba(0,0,0,0.45));">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+          <circle cx="12" cy="10" r="3.5" fill="#ffffff" stroke="#991b1b" stroke-width="1"></circle>
+        </svg>
+      </div>
+    `,
+    iconSize: [34, 42],
+    iconAnchor: [0, 0],
+    popupAnchor: [0, -36],
+  });
+};
 
 const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
   onLocationConfirmed,
@@ -596,44 +619,182 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
   initialAddress = 'Bardoli, Surat, Gujarat',
   disabled = false,
 }) => {
-  const [markerPos, setMarkerPos] = useState<{ x: number; y: number }>({ x: 55, y: 50 });
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const leafletMarkerRef = useRef<L.Marker | null>(null);
+
   const [latitude, setLatitude] = useState<number>(initialLatitude);
   const [longitude, setLongitude] = useState<number>(initialLongitude);
   const [selectedPreset, setSelectedPreset] = useState<DemoPreset | null>(DEMO_PRESETS[0]);
   const [customLocality, setCustomLocality] = useState<string>(initialAddress || 'Bardoli Town, Surat');
   const [talukaName, setTalukaName] = useState<string>('Bardoli');
+  const [districtName, setDistrictName] = useState<string>('Surat');
+  const [stateName, setStateName] = useState<string>('Gujarat');
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isGeocoding, setIsGeocoding] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmationMessage, setConfirmationMessage] = useState<string | null>(null);
-  const [searchFilter, setSearchFilter] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<Array<{ display_name: string; lat: string; lon: string }>>([]);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
 
-  // Update map coordinates based on click position
-  const handleMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (disabled) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.max(5, Math.min(95, ((e.clientY - rect.top) / rect.height) * 100));
-    setMarkerPos({ x, y });
+  // Reverse geocode with OpenStreetMap Nominatim API
+  const reverseGeocodeOSM = useCallback(async (lat: number, lng: number) => {
+    setIsGeocoding(true);
+    setErrorMessage(null);
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            'Accept-Language': 'en',
+          },
+        }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        const addr = data.address || {};
+        const village = addr.village || addr.suburb || addr.neighbourhood || addr.town || addr.city_district || addr.hamlet || '';
+        const taluka = addr.county || addr.state_district || addr.subdistrict || '';
+        const district = addr.state_district || addr.city || 'Surat';
+        const state = addr.state || 'Gujarat';
 
-    // Interpolate Surat region coordinates: Lat 21.0000 - 21.4000, Lng 72.7000 - 73.3500
-    const calcLat = Number((21.4000 - (y / 100) * 0.4000).toFixed(5));
-    const calcLng = Number((72.7000 + (x / 100) * 0.6500).toFixed(5));
-    setLatitude(calcLat);
-    setLongitude(calcLng);
-    setSelectedPreset(null);
-  };
+        const fullAddr = data.display_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        setCustomLocality(village ? `${village}, ${taluka || district}` : fullAddr);
+        if (taluka) setTalukaName(taluka.replace(/taluk|taluka|block/gi, '').trim());
+        if (district) setDistrictName(district.replace(/district/gi, '').trim());
+        if (state) setStateName(state);
 
+        if (leafletMarkerRef.current) {
+          leafletMarkerRef.current.setIcon(createCustomPinIcon(village || fullAddr));
+        }
+      }
+    } catch {
+      // Fallback silently if offline or rate limited
+    } finally {
+      setIsGeocoding(false);
+    }
+  }, []);
+
+  // Initialize Leaflet Map
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+
+    if (leafletMapRef.current) {
+      leafletMapRef.current.remove();
+      leafletMapRef.current = null;
+    }
+
+    const map = L.map(mapContainerRef.current, {
+      center: [initialLatitude, initialLongitude],
+      zoom: 13,
+      zoomControl: true,
+      attributionControl: true,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+    }).addTo(map);
+
+    const marker = L.marker([initialLatitude, initialLongitude], {
+      icon: createCustomPinIcon(customLocality),
+      draggable: !disabled,
+    }).addTo(map);
+
+    marker.on('dragend', () => {
+      const pos = marker.getLatLng();
+      const newLat = Number(pos.lat.toFixed(5));
+      const newLng = Number(pos.lng.toFixed(5));
+      setLatitude(newLat);
+      setLongitude(newLng);
+      setSelectedPreset(null);
+      reverseGeocodeOSM(newLat, newLng);
+    });
+
+    map.on('click', (e: L.LeafletMouseEvent) => {
+      if (disabled) return;
+      const newLat = Number(e.latlng.lat.toFixed(5));
+      const newLng = Number(e.latlng.lng.toFixed(5));
+      marker.setLatLng([newLat, newLng]);
+      setLatitude(newLat);
+      setLongitude(newLng);
+      setSelectedPreset(null);
+      reverseGeocodeOSM(newLat, newLng);
+    });
+
+    leafletMapRef.current = map;
+    leafletMarkerRef.current = marker;
+
+    // Invalidate size after layout renders
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+    }, 250);
+
+    return () => {
+      clearTimeout(timer);
+      map.remove();
+      leafletMapRef.current = null;
+    };
+  }, [disabled, initialLatitude, initialLongitude, reverseGeocodeOSM]);
+
+  // Update marker position when preset is selected
   const handleSelectPreset = (p: DemoPreset) => {
     setSelectedPreset(p);
     setLatitude(p.lat);
     setLongitude(p.lng);
     setCustomLocality(p.address);
     setTalukaName(p.taluka);
+    setDistrictName('Surat');
+    setStateName('Gujarat');
 
-    // Map percentage approximate positioning
-    const normX = Math.max(10, Math.min(90, ((p.lng - 72.7000) / 0.6500) * 100));
-    const normY = Math.max(10, Math.min(90, ((21.4000 - p.lat) / 0.4000) * 100));
-    setMarkerPos({ x: normX, y: normY });
+    if (leafletMapRef.current && leafletMarkerRef.current) {
+      leafletMapRef.current.flyTo([p.lat, p.lng], 14, { duration: 0.8 });
+      leafletMarkerRef.current.setLatLng([p.lat, p.lng]);
+      leafletMarkerRef.current.setIcon(createCustomPinIcon(p.name));
+    }
+  };
+
+  // Perform OpenStreetMap forward search
+  const handleSearchOSM = async (queryText: string) => {
+    if (!queryText || queryText.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          queryText + ', Gujarat, India'
+        )}&countrycodes=in&limit=5`
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        setSearchResults(data || []);
+      }
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSelectSearchResult = (result: { display_name: string; lat: string; lon: string }) => {
+    const lat = Number(parseFloat(result.lat).toFixed(5));
+    const lng = Number(parseFloat(result.lon).toFixed(5));
+    setLatitude(lat);
+    setLongitude(lng);
+    setCustomLocality(result.display_name);
+    setSearchResults([]);
+    setSearchQuery('');
+    setSelectedPreset(null);
+
+    if (leafletMapRef.current && leafletMarkerRef.current) {
+      leafletMapRef.current.flyTo([lat, lng], 15, { duration: 0.8 });
+      leafletMarkerRef.current.setLatLng([lat, lng]);
+      leafletMarkerRef.current.setIcon(createCustomPinIcon(result.display_name));
+    }
+    reverseGeocodeOSM(lat, lng);
   };
 
   const handleConfirm = async () => {
@@ -643,8 +804,8 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
     try {
       const formattedAddress = customLocality.trim() || `${latitude}, ${longitude}`;
       const savedLoc = await createManualLocation({
-        stateName: 'Gujarat',
-        districtName: 'Surat',
+        stateName: stateName || 'Gujarat',
+        districtName: districtName || 'Surat',
         blockName: talukaName || 'Bardoli',
         villageName: formattedAddress,
         latitude,
@@ -657,8 +818,8 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
         formattedAddress,
         latitude,
         longitude,
-        stateName: 'Gujarat',
-        districtName: 'Surat',
+        stateName: stateName || 'Gujarat',
+        districtName: districtName || 'Surat',
         blockName: talukaName || 'Bardoli',
         villageName: formattedAddress,
       });
@@ -671,14 +832,14 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
 
   const filteredPresets = DEMO_PRESETS.filter(
     (p) =>
-      p.name.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      p.taluka.toLowerCase().includes(searchFilter.toLowerCase()) ||
-      p.address.toLowerCase().includes(searchFilter.toLowerCase())
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.taluka.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      p.address.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Demo Mode Status Banner */}
+      {/* Map Mode Status & Attribution Header */}
       <div
         style={{
           display: 'flex',
@@ -687,43 +848,65 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
           flexWrap: 'wrap',
           gap: '8px',
           background: 'var(--bg-subtle)',
-          padding: '10px 16px',
+          padding: '12px 16px',
           borderRadius: 'var(--radius-md)',
           border: '1px solid var(--border-light)',
         }}
       >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              background: '#0b132b',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#06d6a0',
+            }}
+          >
+            <Compass size={18} />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0b132b' }}>
+              Interactive OpenStreetMap Geographic Map
+            </div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Real geographic tiles, roads, and village boundaries • Click or drag the marker
+            </div>
+          </div>
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Compass size={18} color="var(--brand-green)" />
-          <span style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-main)' }}>
-            Interactive Location Map
-          </span>
           <span
             style={{
               background: 'rgba(6, 214, 160, 0.15)',
-              color: 'var(--brand-green)',
-              padding: '2px 8px',
+              color: '#047857',
+              border: '1px solid rgba(6, 214, 160, 0.35)',
+              padding: '3px 10px',
               borderRadius: '12px',
               fontSize: '0.74rem',
               fontWeight: 700,
             }}
           >
-            Demo Map Selector
+            OpenStreetMap Tiles
           </span>
-        </div>
 
-        {onSwitchToAdministrative && (
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={onSwitchToAdministrative}
-            style={{ fontSize: '0.8rem', padding: '4px 10px' }}
-          >
-            <span>Switch to Dropdown Selection</span>
-          </button>
-        )}
+          {onSwitchToAdministrative && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={onSwitchToAdministrative}
+              style={{ fontSize: '0.8rem', padding: '5px 12px' }}
+            >
+              <span>Switch to Administrative Dropdowns</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Quick Search and Filter Bar */}
+      {/* Quick Search and Geocoding Bar */}
       <div style={{ position: 'relative' }}>
         <div
           style={{
@@ -734,6 +917,7 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
             color: 'var(--text-muted)',
             display: 'flex',
             alignItems: 'center',
+            zIndex: 2,
           }}
         >
           <Search size={16} />
@@ -741,135 +925,144 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
         <input
           type="text"
           className="input-control"
-          placeholder="Filter quick presets (e.g. Bardoli, Kamrej, Adajan, Varachha, Olpad)..."
-          value={searchFilter}
-          onChange={(e) => setSearchFilter(e.target.value)}
+          placeholder="Search village, city, taluka or landmark in Gujarat (or filter presets below)..."
+          value={searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            handleSearchOSM(e.target.value);
+          }}
           style={{ paddingLeft: '36px', fontSize: '0.9rem' }}
         />
+        {isSearching && (
+          <div
+            style={{
+              position: 'absolute',
+              right: '12px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              fontSize: '0.75rem',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Searching...
+          </div>
+        )}
+
+        {/* Dynamic Search Autocomplete Dropdown */}
+        {searchResults.length > 0 && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              background: '#ffffff',
+              border: '1px solid var(--border-light)',
+              borderRadius: 'var(--radius-sm)',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              zIndex: 1000,
+              marginTop: '4px',
+              maxHeight: '200px',
+              overflowY: 'auto',
+            }}
+          >
+            {searchResults.map((res, i) => (
+              <div
+                key={i}
+                onClick={() => handleSelectSearchResult(res)}
+                style={{
+                  padding: '10px 14px',
+                  fontSize: '0.84rem',
+                  borderBottom: i < searchResults.length - 1 ? '1px solid #f1f5f9' : 'none',
+                  cursor: 'pointer',
+                  color: '#1e293b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#f8fafc')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#ffffff')}
+              >
+                <MapPin size={14} color="#059669" />
+                <span>{res.display_name}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Preset Quick-Picks Chips */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-        {filteredPresets.map((p) => {
-          const isSelected = selectedPreset?.name === p.name;
-          return (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => handleSelectPreset(p)}
-              style={{
-                background: isSelected ? 'var(--brand-green)' : 'var(--bg-subtle)',
-                color: isSelected ? '#ffffff' : 'var(--text-secondary)',
-                border: `1px solid ${isSelected ? 'var(--brand-green)' : 'var(--border-light)'}`,
-                padding: '5px 10px',
-                borderRadius: '16px',
-                fontSize: '0.78rem',
-                fontWeight: isSelected ? 700 : 500,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              📍 {p.name}
-            </button>
-          );
-        })}
+      <div>
+        <div style={{ fontSize: '0.76rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
+          Quick Taluka & Market Presets (Surat Catchment):
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          {filteredPresets.map((p) => {
+            const isSelected = selectedPreset?.name === p.name;
+            return (
+              <button
+                key={p.name}
+                type="button"
+                onClick={() => handleSelectPreset(p)}
+                style={{
+                  background: isSelected ? '#0b132b' : '#f8fafc',
+                  color: isSelected ? '#06d6a0' : '#334155',
+                  border: `1px solid ${isSelected ? '#0b132b' : '#cbd5e1'}`,
+                  padding: '5px 11px',
+                  borderRadius: '16px',
+                  fontSize: '0.78rem',
+                  fontWeight: isSelected ? 700 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <span>📍</span>
+                <span>{p.name}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Interactive Map Canvas / SVG Grid */}
+      {/* Real Interactive Leaflet + OpenStreetMap Canvas */}
       <div
-        onClick={handleMapClick}
         style={{
           position: 'relative',
           width: '100%',
-          height: '280px',
+          height: '340px',
           borderRadius: 'var(--radius-md)',
           overflow: 'hidden',
-          border: '2px solid var(--border-light)',
-          background: 'linear-gradient(135deg, #e0f2fe 0%, #dbeafe 30%, #ecfdf5 70%, #fef3c7 100%)',
-          cursor: disabled ? 'default' : 'crosshair',
-          boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.05)',
+          border: '2px solid #cbd5e1',
+          background: '#f1f5f9',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
         }}
-        title="Click anywhere on the map to place your business pin"
       >
-        {/* SVG Topographical & Road Network Graphics */}
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-          {/* Tapi River representation */}
-          <path
-            d="M 0 140 Q 150 170, 300 130 T 600 160 T 900 130"
-            fill="none"
-            stroke="#60a5fa"
-            strokeWidth="14"
-            opacity="0.6"
-          />
-          <text x="320" y="135" fill="#2563eb" fontSize="10" fontWeight="600" opacity="0.8">
-            Tapi River Basin
-          </text>
+        <div ref={mapContainerRef} style={{ width: '100%', height: '100%', zIndex: 1 }} />
 
-          {/* NH 48 National Highway */}
-          <line x1="180" y1="0" x2="220" y2="280" stroke="#f59e0b" strokeWidth="6" opacity="0.7" />
-          <text x="140" y="40" fill="#b45309" fontSize="9" fontWeight="700">
-            NH 48 (Surat–Mumbai Corridor)
-          </text>
-
-          {/* State Highway 6 (Bardoli–Surat Road) */}
-          <line x1="0" y1="180" x2="600" y2="120" stroke="#10b981" strokeWidth="4" opacity="0.8" />
-          <text x="360" y="105" fill="#047857" fontSize="9" fontWeight="700">
-            SH 6 (Surat → Bardoli Highway)
-          </text>
-
-          {/* Taluka boundary lines */}
-          <circle cx="120" cy="190" r="45" fill="none" stroke="#94a3b8" strokeDasharray="3,3" strokeWidth="1.5" />
-          <text x="85" y="195" fill="#64748b" fontSize="10" fontWeight="700">
-            Surat City
-          </text>
-
-          <circle cx="480" cy="120" r="50" fill="none" stroke="#94a3b8" strokeDasharray="3,3" strokeWidth="1.5" />
-          <text x="450" y="125" fill="#047857" fontSize="11" fontWeight="800">
-            Bardoli
-          </text>
-
-          <circle cx="300" cy="60" r="40" fill="none" stroke="#94a3b8" strokeDasharray="3,3" strokeWidth="1.5" />
-          <text x="275" y="65" fill="#64748b" fontSize="10" fontWeight="700">
-            Kamrej
-          </text>
-
-          <circle cx="340" cy="230" r="40" fill="none" stroke="#94a3b8" strokeDasharray="3,3" strokeWidth="1.5" />
-          <text x="315" y="235" fill="#64748b" fontSize="10" fontWeight="700">
-            Palsana
-          </text>
-        </svg>
-
-        {/* Pin Marker */}
-        <div
-          style={{
-            position: 'absolute',
-            left: `${markerPos.x}%`,
-            top: `${markerPos.y}%`,
-            transform: 'translate(-50%, -100%)',
-            pointerEvents: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            transition: 'all 0.1s ease-out',
-          }}
-        >
+        {isGeocoding && (
           <div
             style={{
-              background: '#dc2626',
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              background: 'rgba(11, 19, 43, 0.85)',
               color: '#ffffff',
-              padding: '2px 8px',
-              borderRadius: '10px',
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-              whiteSpace: 'nowrap',
-              marginBottom: '2px',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              fontSize: '0.74rem',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
             }}
           >
-            {customLocality.split(',')[0] || 'Selected Point'}
+            <RefreshCw size={12} className="spin" />
+            <span>Resolving address...</span>
           </div>
-          <MapPin size={34} color="#dc2626" fill="#ef4444" style={{ filter: 'drop-shadow(0 3px 4px rgba(0,0,0,0.3))' }} />
-        </div>
+        )}
 
         {/* Map Help Overlay Badge */}
         <div
@@ -877,15 +1070,18 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
             position: 'absolute',
             bottom: '8px',
             left: '8px',
-            background: 'rgba(255, 255, 255, 0.9)',
-            padding: '4px 10px',
+            background: 'rgba(255, 255, 255, 0.95)',
+            padding: '5px 12px',
             borderRadius: 'var(--radius-sm)',
-            fontSize: '0.74rem',
-            color: 'var(--text-secondary)',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            fontSize: '0.75rem',
+            color: '#1e293b',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+            zIndex: 1000,
+            border: '1px solid #e2e8f0',
+            fontWeight: 500,
           }}
         >
-          👆 Click anywhere on the map or select a quick preset above
+          🗺️ Click anywhere on the map or drag the pin to set your enterprise location
         </div>
       </div>
 
@@ -898,13 +1094,13 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
           padding: '16px',
         }}
       >
-        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--brand-green)', marginBottom: '12px' }}>
+        <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0b132b', marginBottom: '12px' }}>
           📍 Selected Coordinates & Locality Information
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
           <div>
-            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', fontWeight: 600 }}>
               Locality / Village / Business Address
             </label>
             <input
@@ -918,7 +1114,7 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
           </div>
 
           <div>
-            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', fontWeight: 600 }}>
               Taluka / Block
             </label>
             <input
@@ -932,7 +1128,21 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
           </div>
 
           <div>
-            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', fontWeight: 600 }}>
+              District
+            </label>
+            <input
+              type="text"
+              className="input-control"
+              value={districtName}
+              onChange={(e) => setDistrictName(e.target.value)}
+              placeholder="e.g. Surat"
+              disabled={disabled}
+            />
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', fontWeight: 600 }}>
               Latitude (°N)
             </label>
             <input
@@ -940,13 +1150,20 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
               step="0.00001"
               className="input-control"
               value={latitude}
-              onChange={(e) => setLatitude(Number(e.target.value))}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setLatitude(val);
+                if (leafletMarkerRef.current && leafletMapRef.current) {
+                  leafletMarkerRef.current.setLatLng([val, longitude]);
+                  leafletMapRef.current.panTo([val, longitude]);
+                }
+              }}
               disabled={disabled}
             />
           </div>
 
           <div>
-            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px', fontWeight: 600 }}>
               Longitude (°E)
             </label>
             <input
@@ -954,7 +1171,14 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
               step="0.00001"
               className="input-control"
               value={longitude}
-              onChange={(e) => setLongitude(Number(e.target.value))}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setLongitude(val);
+                if (leafletMarkerRef.current && leafletMapRef.current) {
+                  leafletMarkerRef.current.setLatLng([latitude, val]);
+                  leafletMapRef.current.panTo([latitude, val]);
+                }
+              }}
               disabled={disabled}
             />
           </div>
@@ -967,7 +1191,7 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
             className="btn btn-primary"
             onClick={handleConfirm}
             disabled={isSaving || disabled}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 18px' }}
           >
             {isSaving ? (
               <>
@@ -1024,4 +1248,5 @@ const DemoMapLocationPicker: React.FC<GoogleMapsLocationPickerProps> = ({
     </div>
   );
 };
+
 

@@ -580,7 +580,15 @@ export const AssessmentWorkflowPage: React.FC<AssessmentWorkflowPageProps> = ({
   }
 
   return (
-    <div style={{ maxWidth: '880px', margin: '0 auto', paddingBottom: '60px' }}>
+    <div
+      style={{
+        maxWidth: currentStep === 'report' ? '1480px' : '920px',
+        width: currentStep === 'report' ? '95%' : '100%',
+        margin: '0 auto',
+        paddingBottom: '60px',
+        transition: 'max-width 0.25s ease',
+      }}
+    >
       {/* Header bar */}
       <div
         style={{

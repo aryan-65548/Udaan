@@ -204,7 +204,8 @@ describe('Feasibility Report Engine Integration Tests (Live DB)', () => {
     expect(report.financialFeasibility).toBeDefined();
     expect(report.financialFeasibility.projectCost).toBe(500000);
     expect(report.financialFeasibility.ownContribution).toBe(100000);
-    expect(report.financialFeasibility.baseLoanAmount).toBe(400000);
+    expect(report.financialFeasibility.baseLoanAmount).toBe(450000); // 90% of 500k
+    expect(report.financialFeasibility.requestedFundingGap).toBe(400000); // 500k - 100k
     expect(report.financialFeasibility.schemeName).toBeDefined();
     expect(report.financialFeasibility.disclaimer).toBeDefined();
 

@@ -69,6 +69,8 @@ export interface FeasibilityReportData {
     templateKey: string;
     version: number;
     generatedAt: string;
+    reportGeneratedDate?: string;
+    reportStatus?: string;
     businessName: string;
     businessCategory: string;
     location: string;
@@ -116,6 +118,13 @@ export interface FeasibilityReportData {
   // Section 4: Pricing & Product Strategy
   pricingProductStrategy: {
     pricingApproach: string;
+    pricingPillars?: Array<{
+      pillarNumber?: number;
+      title: string;
+      approach?: string;
+      recommendedApproach?: string;
+      whyItMatters?: string;
+    }>;
     inventoryMix: Array<{
       category: string;
       turnover: string;
@@ -129,9 +138,17 @@ export interface FeasibilityReportData {
     projectCost: number | null;
     ownContribution: number | null;
     baseLoanAmount: number | null;
+    schemeLoanCap?: number | null;
+    finalEligibleLoan?: number | null;
+    maximumSchemeFinancing?: number | null;
     loanAmount: number | null;
     requiredOwnContribution: number | null;
     shortfall: number | null;
+    actualContributionPercentage?: number | null;
+    minimumContributionPercentage?: number | null;
+    requestedFundingGap?: number | null;
+    isEligibleMargin?: boolean;
+    marginStatusMessage?: string;
     theoretical10PercentMargin: number | null;
     financingPercentage: number | string | null;
     schemeCode: string;
@@ -139,10 +156,33 @@ export interface FeasibilityReportData {
     annualInterestRate: string;
     totalTenureMonths: number;
     moratoriumMonths: number;
+    activeRepaymentMonths?: number;
+    activeRepaymentPeriodMonths?: number;
+    activeRepaymentsCount?: number;
+    paymentFrequency?: string;
+    repaymentFrequency?: string;
+    moratoriumInterestTreatment?: string;
     installmentAmount: number | string | null;
+    annualDebtService?: number | string | null;
+    totalInterest?: number | string | null;
+    totalRepayment?: number | string | null;
+    totalRepaymentAmount?: number | string | null;
     dscr: number | string | null;
     dscrStatus: string;
     dscrExplanation: string;
+    dscrIsIllustrative?: boolean;
+    hasRevenueInputs?: boolean;
+    monthlyProjectedRevenue?: number;
+    monthlyOperatingCost?: number;
+    monthlyOperatingSurplus?: number;
+    annualCashAvailable?: number;
+    demoCashFlow?: {
+      monthlyRevenue: number;
+      monthlyOperatingCost: number;
+      monthlyOperatingSurplus: number;
+      annualCashAvailable: number;
+      annualDebtService: number;
+    };
     repaymentSchedule: any[];
     isScheduleCalculable: boolean;
     disclaimer: string;
@@ -159,10 +199,13 @@ export interface FeasibilityReportData {
   // Section 7: Risk Analysis & Mitigation
   riskAnalysis: Array<{
     risk: string;
+    whyItMatters?: string;
     likelihood: string;
     impact: string;
     mitigationStrategy: string;
+    mitigationPoints?: string[];
     monitoringIndicator: string;
+    monitoringPoints?: string[];
   }>;
 
   // Section 8: Infrastructure & Ground Reality
@@ -188,9 +231,28 @@ export interface FeasibilityReportData {
       ratingLabel: string;
       impact: string;
       recommendations: string[];
-      priority: 'HIGH' | 'MEDIUM' | 'LOW';
+      priority: 'HIGH' | 'MEDIUM' | 'LOW' | 'High' | 'Medium' | 'Low';
     }>;
   };
+
+  // Section 8.5 / 9: Other Government Schemes & Support
+  otherGovernmentSchemes?: Array<{
+    schemeCode?: string;
+    schemeName: string;
+    agency?: string;
+    department?: string;
+    purpose: string;
+    assistanceType: string;
+    eligibilityConditions: string;
+    currentAssessmentStatus?: string;
+    assessmentStatus?: string;
+    statusLabel?: string;
+    eligibilityExplanation?: string;
+    why?: string;
+    officialUrl: string;
+    lastVerifiedDate?: string;
+    lastVerified?: string;
+  }>;
 
   // Section 9: Support Organizations
   supportOrganizations: SupportOrganizationItem[];
